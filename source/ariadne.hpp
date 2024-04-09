@@ -43,6 +43,8 @@ namespace Ariadne {
 #include "algebra/vector.hpp"
 #include "algebra/matrix.hpp"
 
+#include "approximations/bernstein_polynomial.hpp"
+
 #include "function/function.hpp"
 #include "function/taylor_model.hpp"
 #include "function/taylor_function.hpp"

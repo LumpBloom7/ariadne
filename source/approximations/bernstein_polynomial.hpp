@@ -11,29 +11,39 @@
 #include "numeric/bits.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/rounding.hpp"
+#include "numeric/real.hpp"
+#include "numeric/validated_real.hpp"
+#include "numeric/dyadic.hpp"
+#include "numeric/rational.hpp"
+
 
 namespace Ariadne {
 
 class BernsteinPolynomial {
 public:
-    BernsteinPolynomial(const std::function<double(double)>& function, size_t degree);
-    Bounds<FloatMP> evaluate(double x);
+    BernsteinPolynomial(const std::function<double(double)>& function, int degree);
+    FloatMPBounds evaluate(double x, size_t effort);
 
 private:
-    Bounds<FloatMP> binomialCoefficient(const size_t n, const size_t k);
+    FloatMPBounds binomialCoefficient(const int n, const int k);
     std::vector<ExactDouble> computeCoefficients();
-    Bounds<FloatMP> bernsteinBasisPolynomialFor(size_t v, double x);
+    FloatMPBounds bernsteinBasisPolynomialFor(int v, double x, size_t effort);
 
-    static Bounds<FloatMP> factorial(size_t x);
+    static FloatMPBounds factorial(int x);
 
     const std::function<double(double)>& _function;
-    const size_t _degree;
+    const int _degree;
     std::vector<ExactDouble> _coefficients;
 
     // Caches to reduce computation time spent on things not dependent on x
     // Using these allows the computation time to be O(1) amortised
-    static std::vector<Bounds<FloatMP>> _factorialCache;
-    std::vector<Bounds<FloatMP>> _binomialCache;
+    static std::vector<FloatMPBounds> _factorialCache;
+    static double _mantissaBitsCount;
+    std::vector<FloatMPBounds> _binomialCache;
+
+    static FloatMPBounds toPrecision(const FloatMPBounds& x, const MultiplePrecision& pr){
+        return FloatMPBounds(x, pr);
+    }
 };
 
 }

@@ -6,19 +6,13 @@
 
 namespace Ariadne {
 namespace {
-class BinomialCoefficients : public Cache<Integer, Nat64, Nat64> {
-  protected:
-    Integer compute(Nat64 n, Nat64 m) {
-        auto a = Factorials::get(n);
-        auto b = Factorials::get(m), c = Factorials::get(n - m);
+static SimpleCache<Integer, Nat64, Nat64> binomialCoefficients {[](auto n, auto m) {
+    auto a = Factorials::get(n);
+    auto b = Factorials::get(m);
+    auto c = Factorials::get(n - m);
 
-        auto res = (a / (b * c)).get_num(); // This will always be an integer
-
-        return res;
-    }
-};
-
-static BinomialCoefficients binomialCoefficients = BinomialCoefficients();
+    return (a / (b * c)).get_num(); // This will always be an integer
+}};
 } // namespace
 
 BernsteinPolynomial::BernsteinPolynomial(const std::function<double(double)>& function, int degree) : _function{function}, _degree{degree} {

@@ -42,6 +42,7 @@ class Nat32 {
     Nat32() : _m(0u) { }
     template<BuiltinUnsignedIntegral M> Nat32(M m) : _m(m) { assert(_m==m); }
     template<BuiltinSignedIntegral N> Nat32(N n) : _m(n) { assert(n>=0); assert((int64_t)_m==n); }
+    operator uint32_t() const { return get_ui(); }
     uint32_t get_ui() const { return _m; }
 };
 
@@ -53,6 +54,7 @@ class Nat64 {
     template<BuiltinSignedIntegral N> Nat64(N n) : _m(static_cast<uint64_t>(n)) { assert(n>=0); assert((int64_t)_m==n);
         assert(uint64_t(int64_t(_m))==_m); }
     uint64_t get_ui() const { return _m; }
+    operator uint64_t() const { return get_ui(); }
 };
 
 class Int32 {
@@ -62,6 +64,7 @@ class Int32 {
     template<BuiltinUnsignedIntegral M> Int32(M m) : _n(static_cast<int32_t>(m)) { assert(_n>=0); assert((uint32_t)_n==m); }
     template<BuiltinSignedIntegral N> Int32(N n) : _n(n) { assert(_n==n); }
     int32_t get_si() const { return _n; }
+    operator int32_t() const { return get_si(); }
 };
 
 class Int64 {
@@ -71,6 +74,7 @@ class Int64 {
     template<BuiltinUnsignedIntegral M> Int64(M m) : _n(static_cast<int64_t>(m)) { assert(_n>=0); assert((uint64_t)_n==m); }
     template<BuiltinSignedIntegral N> Int64(N n) : _n(n) { assert(_n==n); }
     int64_t get_si() const { return _n; }
+    operator int64_t() const { return get_si(); }
 };
 
 uint32_t fac(uint8_t n);

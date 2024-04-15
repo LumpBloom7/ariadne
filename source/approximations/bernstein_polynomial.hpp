@@ -8,6 +8,7 @@
 #include "numeric/float_bounds.hpp"
 #include "numeric/floatmp.hpp"
 #include "numeric/int.hpp"
+#include "utility/factorials.hpp"
 #include "utility/standard.hpp"
 
 namespace Ariadne {
@@ -22,15 +23,10 @@ class BernsteinPolynomial {
     std::vector<ExactDouble> computeCoefficients();
     FloatMPBounds bernsteinBasisPolynomialFor(int v, double x, size_t effort);
 
-    static Integer factorial(int x);
-
     const std::function<double(double)>& _function;
     const int _degree;
     std::vector<ExactDouble> _coefficients;
 
-    // Caches to reduce computation time spent on things not dependent on x
-    // Using these allows the computation time to be O(1) amortised
-    static std::vector<Integer> _factorialCache;
     std::vector<Integer> _binomialCache;
 
     static FloatMPBounds toPrecision(const FloatMPBounds& x, const MultiplePrecision& pr) {

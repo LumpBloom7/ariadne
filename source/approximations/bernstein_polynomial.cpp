@@ -9,26 +9,6 @@ BernsteinPolynomial::BernsteinPolynomial(const std::function<double(double)>& fu
     _binomialCache = {};
 }
 
-Integer BernsteinPolynomial::factorial(int x) {
-    // This factorial function uses a cache to avoid recomputation of factors.
-    // *In theory* all generated factorials should be 100% correct as I make sure that more than enough bits are reserved for the mantissa.
-    // The cache is global, so all instances of BernsteinPolynomials will refer to the same cache.
-
-    if (_factorialCache.size() > x)
-        return _factorialCache[x];
-
-    auto res = _factorialCache.back();
-
-    // Recursion causes a stackoverflow on higher x values
-    // For-loop my beloved gets to shine again.
-    for (int i = _factorialCache.size(); i <= x; ++i) {
-        res *= i;
-        _factorialCache.emplace_back(res);
-    }
-
-    return res;
-}
-
 Integer BernsteinPolynomial::binomialCoefficient(const int n, const int k) {
     // Like the factorial function, this one uses a cache as well. The precision should always be larger-than or equal to what is actually needed.
     // This is stored not on a global level though.
@@ -38,8 +18,8 @@ Integer BernsteinPolynomial::binomialCoefficient(const int n, const int k) {
 
     // FloatMP preserves precision of the least precise factor during multiplication of two FloatMPs
     // We try to resolve this by first "casting" them to a higher precision level (which is overestimated)
-    auto a = factorial(n);
-    auto b = factorial(k), c = factorial(n - k);
+    auto a = Factorials::get(n);
+    auto b = Factorials::get(k), c = Factorials::get(n - k);
 
     auto res = (a / (b * c)).get_num(); // This will always be an integer
 
@@ -74,7 +54,4 @@ FloatMPBounds BernsteinPolynomial::evaluate(double x, size_t effort) {
 
     return sum;
 }
-
-std::vector<Integer> BernsteinPolynomial::_factorialCache = {1, 1};
-
 } // namespace Ariadne

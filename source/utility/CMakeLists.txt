@@ -2,6 +2,7 @@ set(LIBRARY_NAME ariadne-utility)
 
 add_library(${LIBRARY_NAME} OBJECT
         stack_trace.cpp
+        factorials.cpp
 )
 
 foreach(WARN ${LIBRARY_EXCLUSIVE_WARN})

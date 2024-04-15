@@ -1,30 +1,19 @@
 #include "approximations/bernstein_polynomial.hpp"
 
-#include <iostream>
-
 #include "numeric/rational.hpp"
 #include "utility/hash_numeric.hpp"
 #include "utility/hash_tuple.hpp"
 
 namespace Ariadne {
 namespace {
-class BinomialCoefficients : Cache<Integer, std::tuple<Nat64, Nat64>> {
-  public:
-    using Cache<Integer, std::tuple<Nat64, Nat64>>::get;
-    Integer operator()(const int n, const int m) { return get(n, m); }
-    Integer get(const int n, const int m) { return get(std::make_tuple(n, m)); }
-
+class BinomialCoefficients : public Cache<Integer, Nat64, Nat64> {
   protected:
-    Integer compute(std::tuple<Nat64, Nat64> args) {
-        Nat64 n = std::get<0>(args);
-        Nat64 k = std::get<1>(args);
-
+    Integer compute(Nat64 n, Nat64 m) {
         auto a = Factorials::get(n);
-        auto b = Factorials::get(k), c = Factorials::get(n - k);
+        auto b = Factorials::get(m), c = Factorials::get(n - m);
 
         auto res = (a / (b * c)).get_num(); // This will always be an integer
 
-        std::cout << res << std::endl;
         return res;
     }
 };

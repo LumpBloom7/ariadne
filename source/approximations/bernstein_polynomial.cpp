@@ -1,29 +1,39 @@
 #include "approximations/bernstein_polynomial.hpp"
 
+#include <iostream>
+
 #include "numeric/rational.hpp"
+#include "utility/hash_numeric.hpp"
+#include "utility/hash_tuple.hpp"
 
 namespace Ariadne {
+namespace {
+class BinomialCoefficients : Cache<Integer, std::tuple<Nat64, Nat64>> {
+  public:
+    using Cache<Integer, std::tuple<Nat64, Nat64>>::get;
+    Integer operator()(const int n, const int m) { return get(n, m); }
+    Integer get(const int n, const int m) { return get(std::make_tuple(n, m)); }
+
+  protected:
+    Integer compute(std::tuple<Nat64, Nat64> args) {
+        Nat64 n = std::get<0>(args);
+        Nat64 k = std::get<1>(args);
+
+        auto a = Factorials::get(n);
+        auto b = Factorials::get(k), c = Factorials::get(n - k);
+
+        auto res = (a / (b * c)).get_num(); // This will always be an integer
+
+        std::cout << res << std::endl;
+        return res;
+    }
+};
+
+static BinomialCoefficients binomialCoefficients = BinomialCoefficients();
+} // namespace
 
 BernsteinPolynomial::BernsteinPolynomial(const std::function<double(double)>& function, int degree) : _function{function}, _degree{degree} {
     _coefficients = computeCoefficients();
-    _binomialCache = {};
-}
-
-Integer BernsteinPolynomial::binomialCoefficient(const int n, const int k) {
-    // Like the factorial function, this one uses a cache as well. The precision should always be larger-than or equal to what is actually needed.
-    // This is stored not on a global level though.
-
-    if (_binomialCache.size() > k)
-        return _binomialCache[k];
-
-    // FloatMP preserves precision of the least precise factor during multiplication of two FloatMPs
-    // We try to resolve this by first "casting" them to a higher precision level (which is overestimated)
-    auto a = Factorials::get(n);
-    auto b = Factorials::get(k), c = Factorials::get(n - k);
-
-    auto res = (a / (b * c)).get_num(); // This will always be an integer
-
-    return _binomialCache.emplace_back(res);
 }
 
 std::vector<ExactDouble> BernsteinPolynomial::computeCoefficients() {
@@ -38,7 +48,7 @@ std::vector<ExactDouble> BernsteinPolynomial::computeCoefficients() {
 FloatMPBounds BernsteinPolynomial::bernsteinBasisPolynomialFor(int v, double x, size_t effort) {
     auto X = FloatMPBounds(exact(x), MultiplePrecision(effort));
 
-    return binomialCoefficient(_degree, v) * pow(X, v) * pow(1 - X, _degree - v);
+    return binomialCoefficients(_degree, v) * pow(X, v) * pow(1 - X, _degree - v);
 }
 
 FloatMPBounds BernsteinPolynomial::evaluate(double x, size_t effort) {
@@ -54,4 +64,5 @@ FloatMPBounds BernsteinPolynomial::evaluate(double x, size_t effort) {
 
     return sum;
 }
+
 } // namespace Ariadne

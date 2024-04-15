@@ -7,9 +7,10 @@
 
 #include "numeric/float_bounds.hpp"
 #include "numeric/floatmp.hpp"
-#include "numeric/int.hpp"
+#include "numeric/integer.hpp"
 #include "utility/factorials.hpp"
 #include "utility/standard.hpp"
+#include "utility/cache.hpp"
 
 namespace Ariadne {
 
@@ -19,19 +20,12 @@ class BernsteinPolynomial {
     FloatMPBounds evaluate(double x, size_t effort);
 
   private:
-    Integer binomialCoefficient(const int n, const int k);
     std::vector<ExactDouble> computeCoefficients();
     FloatMPBounds bernsteinBasisPolynomialFor(int v, double x, size_t effort);
 
     const std::function<double(double)>& _function;
     const int _degree;
     std::vector<ExactDouble> _coefficients;
-
-    std::vector<Integer> _binomialCache;
-
-    static FloatMPBounds toPrecision(const FloatMPBounds& x, const MultiplePrecision& pr) {
-        return FloatMPBounds(x, pr);
-    }
 };
 
 } // namespace Ariadne

@@ -10,25 +10,22 @@
 #include "numeric/integer.hpp"
 #include "utility/cache.hpp"
 #include "utility/factorials.hpp"
-#include "utility/standard.hpp"
 #include "utility/hash.hpp"
-#include "utility/hash_tuple.hpp"
 #include "utility/hash_numeric.hpp"
+#include "utility/hash_tuple.hpp"
+#include "utility/standard.hpp"
+#include "numeric/float_approximation.hpp"
 
 namespace Ariadne {
-namespace {
-static SimpleCache<Integer, Nat64, Nat64> binomialCoefficients{[](auto n, auto m) {
-    auto a = Factorials::get(n);
-    auto b = Factorials::get(m);
-    auto c = Factorials::get(n - m);
 
-    return (a / (b * c)).get_num(); // This will always be an integer
-}};
-}
+class BernsteinPolynomialBase {
+  protected:
+    static SimpleCache<Integer, Nat64, Nat64> binomialCoefficients;
+};
 
 template<typename T>
     requires HasPrecisionType<T> && ConvertibleTo<T, Bounds<T>>
-class BernsteinPolynomial {
+class BernsteinPolynomial : protected BernsteinPolynomialBase {
   public:
     BernsteinPolynomial(const std::function<T(T)>& function, int degree, size_t precision) : _function{function}, _degree{degree}, _precision{precision} {
         _coefficients = computeCoefficients();
@@ -48,7 +45,7 @@ class BernsteinPolynomial {
         return sum;
     };
 
-    Bounds<T> evaluate(Bounds<T> x){
+    Bounds<T> evaluate(Bounds<T> x) {
         return evaluate(Bounds<T>(x));
     }
 
@@ -57,7 +54,7 @@ class BernsteinPolynomial {
         std::vector<T> coefficients = {};
 
         for (size_t i = 0; i <= _degree; ++i)
-            coefficients.emplace_back(_function(FloatMP(Approximation<FloatMP>(i / static_cast<float>(_degree), MultiplePrecision(_precision)))));
+            coefficients.emplace_back(_function(T(Approximation<T>(i / static_cast<float>(_degree), MultiplePrecision(_precision)))));
 
         return coefficients;
     };

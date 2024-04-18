@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 
+#include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/floatmp.hpp"
 #include "numeric/integer.hpp"
@@ -14,7 +15,6 @@
 #include "utility/hash_numeric.hpp"
 #include "utility/hash_tuple.hpp"
 #include "utility/standard.hpp"
-#include "numeric/float_approximation.hpp"
 
 namespace Ariadne {
 
@@ -27,14 +27,14 @@ template<typename T>
     requires HasPrecisionType<T> && ConvertibleTo<T, Bounds<T>>
 class BernsteinPolynomial : protected BernsteinPolynomialBase {
   public:
-    BernsteinPolynomial(const std::function<T(T)>& function, int degree, size_t precision) : _function{function}, _degree{degree}, _precision{precision} {
+    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)>& function, int degree, size_t max_precision) : _function{function}, _degree{degree}, _precision{max_precision} {
         _coefficients = computeCoefficients();
     }
 
-    Bounds<T> evaluate(T x) {
+    Bounds<T> evaluate(Bounds<T> x) {
         Bounds<T> sum = T(0, x.precision());
 
-        if (x < 0 || x > 1)
+        if (Detail::possibly((x < 0 ||x > 1).repr()))
             return sum;
 
         for (size_t i = 0; i <= _degree; ++i) {
@@ -45,13 +45,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return sum;
     };
 
-    Bounds<T> evaluate(Bounds<T> x) {
-        return evaluate(Bounds<T>(x));
-    }
-
   private:
-    std::vector<T> computeCoefficients() {
-        std::vector<T> coefficients = {};
+    std::vector<Bounds<T>> computeCoefficients() {
+        std::vector<Bounds<T>> coefficients = {};
 
         for (size_t i = 0; i <= _degree; ++i)
             coefficients.emplace_back(_function(T(Approximation<T>(i / static_cast<float>(_degree), MultiplePrecision(_precision)))));
@@ -59,13 +55,13 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return coefficients;
     };
 
-    Bounds<T> bernsteinBasisPolynomialFor(int v, T x) {
+    Bounds<T> bernsteinBasisPolynomialFor(int v, Bounds<T> x) {
         return binomialCoefficients(_degree, v) * pow(x, v) * pow(1 - x, _degree - v);
     }
 
-    const std::function<T(T)>& _function;
+    const std::function<Bounds<T>(Bounds<T>)>& _function;
     const int _degree;
-    std::vector<T> _coefficients;
+    std::vector<Bounds<T>> _coefficients;
     const size_t _precision;
 };
 

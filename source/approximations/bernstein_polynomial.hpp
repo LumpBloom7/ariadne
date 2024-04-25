@@ -8,6 +8,7 @@
 
 #include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
+#include "numeric/float_error.hpp"
 #include "numeric/floatmp.hpp"
 #include "numeric/integer.hpp"
 #include "numeric/real.hpp"
@@ -35,7 +36,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
     BernsteinPolynomial(std::function<Bounds<T>(Bounds<T>)> function, int degree) : _function{function}, _degree{degree} {}
 
-    PositiveUpperBound<T> maximumError() {
+    Error<T> maximumError() {
         auto maximum = _errorBounds[0];
 
         for (int i = 1; i < _errorBounds.size(); ++i) {
@@ -46,11 +47,11 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
         return maximum;
     }
-    PositiveUpperBound<T> maximumErrorAt(Bounds<T> x) {
+    Error<T> maximumErrorAt(Bounds<T> x) {
         T denominator = T(Approximation<T>(1 / static_cast<float>(_degree), x.precision()));
 
-        auto maximum = PositiveUpperBound<T>(0.0_x, x.precision());
- 
+        auto maximum = Error<T>(0.0_x, x.precision());
+
         for (size_t i = 0; i < _degree; ++i) {
             auto xl = i * denominator;
             auto xr = (i + 1) * denominator;
@@ -68,8 +69,8 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         // This is out of evaluation domain, return 0.
         // We could remove this with little consequence to correctness, as evaluating a BernsteinPolynomial like this would be undefined anyways.
         // Doing this allows us to skip computations tExactDoublehough.
-        if (Detail::possibly((x < 0 || x > 1).repr()))
-            return T(0, x.precision());
+        // if (Detail::possibly((x < 0 || x > 1).repr()))
+        // return T(0, x.precision());
 
         validateCoefficients(x.precision());
 
@@ -90,30 +91,55 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             return;
 
         _coefficients = {};
+
+        T denominator = T(Approximation<T>(1 / static_cast<float>(_degree), precisionType));
+        for (size_t i = 0; i <= _degree; ++i) {
+            auto x = i * denominator;
+            auto res = _function(x);
+
+            _coefficients.emplace_back(res);
+        }
+        validateErrorBounds(precisionType);
+    };
+
+    void validateErrorBounds(PR precisionType) {
         _errorBounds = {};
 
         T denominator = T(Approximation<T>(1 / static_cast<float>(_degree), precisionType));
-        _coefficients.emplace_back(_function(Bounds<T>(0, precisionType)));
 
         for (size_t i = 1; i <= _degree; ++i) {
             auto x = i * denominator;
-            auto res = _function(i * denominator);
+            auto interval = Bounds<T>(LowerBound<T>((i - 1) * denominator), UpperBound<T>(x));
 
-            auto interval = Bounds<T>(LowerBound<T>((i - 1) / denominator), UpperBound<T>(x));
+            auto originalBounds = _function(interval);
+            auto approxBounds = evaluate(interval);
 
-            _errorBounds.emplace_back(mag(_function(interval)));
-            _coefficients.emplace_back(res);
+            auto error = originalBounds - approxBounds; // This is massively wrong
+
+            std::cout << interval << std::endl;
+            std::cout << originalBounds << std::endl;
+            std::cout << approxBounds << std::endl;
+            std::cout << error << std::endl;
+            std::cout << mag(error) << std::endl
+                      << std::endl;
+
+            _errorBounds.emplace_back(mag(error));
         }
-    };
+    }
 
     Bounds<T> bernsteinBasisPolynomialFor(int v, Bounds<T> x) {
-        return binomialCoefficients(_degree, v) * pow(x, v) * pow(1 - x, _degree - v);
+        auto a = pow(x, v);
+        auto b = pow(1 - x, _degree - v);
+        auto c = a * b;
+        auto d = binomialCoefficients(_degree, v) * c;
+
+        return d;
     }
 
     std::function<Bounds<T>(Bounds<T>)> _function;
     const int _degree;
     std::vector<Bounds<T>> _coefficients;
-    std::vector<PositiveUpperBound<T>> _errorBounds;
+    std::vector<Error<T>> _errorBounds;
 };
 
 // TODO: We can't approximate easily using Reals, as it would require several computations of the original functions, which is not ideal

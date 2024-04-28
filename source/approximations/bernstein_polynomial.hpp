@@ -66,7 +66,6 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return binomialCoefficients(n, v) * pow(x, v) * pow(1 - x, n - v);
     }
     std::vector<Bounds<T>> _coefficients;
-    std::vector<Bounds<T>> _errorBounds;
 };
 } // namespace Ariadne
 

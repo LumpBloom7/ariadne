@@ -49,11 +49,23 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return sum;
     };
 
+    Bounds<T> DeCasteljau(Bounds<T> x) {
+        std::vector<Bounds<T>> beta = std::vector<Bounds<T>>(_coefficients);
+
+        int n = beta.size();
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < (n - i) - 1; j++) {
+                beta[j] = beta[j] * (1 - x) + beta[j + 1] * x;
+            }
+        }
+        return beta[0];
+    }
+
   protected:
     void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)>& function, int degree, PR precisionType) {
         _coefficients = {};
 
-        T denominator = T(Approximation<T>(1 / static_cast<float>(degree), precisionType));
+        Bounds<T> denominator = T(1, precisionType) / T(degree, precisionType);
         for (size_t i = 0; i <= degree; ++i) {
             auto x = i * denominator;
             auto res = function(x);

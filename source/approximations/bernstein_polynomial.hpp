@@ -63,7 +63,8 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
   protected:
     void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)>& function, int degree, PR precisionType) {
-        _coefficients = {};
+        _coefficients.clear();
+        _coefficients.reserve(degree + 1);
 
         Bounds<T> denominator = T(1, precisionType) / T(degree, precisionType);
         for (size_t i = 0; i <= degree; ++i) {
@@ -77,7 +78,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, Bounds<T> x) {
         return binomialCoefficients(n, v) * pow(x, v) * pow(1 - x, n - v);
     }
-    std::vector<Bounds<T>> _coefficients;
+    std::vector<Bounds<T>> _coefficients {};
 };
 } // namespace Ariadne
 

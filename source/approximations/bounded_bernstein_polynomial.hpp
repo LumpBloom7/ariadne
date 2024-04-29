@@ -50,7 +50,8 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
   private:
     bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> targetEpsilon) {
         auto degree = (this->_coefficients).size() - 1;
-        _errorBounds = {};
+        _errorBounds.clear();
+        _errorBounds.reserve(degree);
         T denominator = T(Approximation<T>(1 / static_cast<float>(degree), targetEpsilon.precision()));
 
         for (size_t i = 1; i <= degree; ++i) {
@@ -58,7 +59,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             auto interval = Bounds<T>(LowerBound<T>((i - 1) * denominator), UpperBound<T>(x));
 
             auto originalBounds = function(interval);
-            auto polynomialBounds = this->DeCasteljau(interval);
+            auto polynomialBounds = this->evaluate(interval);
 
             auto maxError = mag(originalBounds - polynomialBounds);
 
@@ -77,7 +78,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         return true;
     }
 
-    std::vector<PositiveUpperBound<T>> _errorBounds;
+    std::vector<PositiveUpperBound<T>> _errorBounds{};
 };
 
 } // namespace Ariadne

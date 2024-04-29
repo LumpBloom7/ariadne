@@ -80,7 +80,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T>& x) {
         int v2 = (v * 2 >= n) ? (n - v) : v; // Used to avoid computing extra redundant values in binomial cache
 
-        return binomialCoefficients(n, v2) * pow(x, v) * pow(1 - x, n - v);
+        return binomialCoefficients(n, v2) * pow(x.value(), v) * pow(1 - x.value(), n - v);
     }
     std::vector<Bounds<T>> _coefficients{};
 };

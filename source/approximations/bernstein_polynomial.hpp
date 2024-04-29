@@ -37,7 +37,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         generateCoefficients(function, degree, MultiplePrecision(maxPrecision));
     }
 
-    Bounds<T> evaluate(Bounds<T> x) {
+    Bounds<T> evaluate(Bounds<T> x) const {
         auto sum = Bounds<T>(x.precision());
 
         auto degree = _coefficients.size() - 1;
@@ -49,7 +49,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return sum;
     };
 
-    Bounds<T> DeCasteljau(Bounds<T> x) {
+    Bounds<T> DeCasteljau(Bounds<T> x) const {
         std::vector<Bounds<T>> beta = std::vector<Bounds<T>>(_coefficients);
 
         int n = beta.size();
@@ -60,6 +60,8 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         }
         return beta[0];
     }
+
+    Bounds<T> operator()(Bounds<T> x) const { return evaluate(x); }
 
   protected:
     void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)>& function, int degree, PR precisionType) {
@@ -76,7 +78,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     }
 
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, Bounds<T> x) {
-        int v2 = (v * 2 > n) ? (n - v) : v; // Used to avoid computing extra redundant values in binomial cache
+        int v2 = (v * 2 >= n) ? (n - v) : v; // Used to avoid computing extra redundant values in binomial cache
 
         return binomialCoefficients(n, v2) * pow(x, v) * pow(1 - x, n - v);
     }

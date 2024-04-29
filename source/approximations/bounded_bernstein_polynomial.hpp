@@ -26,7 +26,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         } while (!computeErrorBounds(function, targetEpsilon));
     }
 
-    PositiveUpperBound<T> maximumErrorAt(Bounds<T> x) {
+    PositiveUpperBound<T> maximumErrorAt(Bounds<T> x) const {
         auto degree = (this->_coefficients).size() - 1;
         Bounds<T> denominator = Bounds<T>(T(Approximation<T>(1 / static_cast<float>(degree), x.precision())));
         auto maximum = PositiveUpperBound<T>(x.precision());

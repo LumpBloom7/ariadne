@@ -29,6 +29,16 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         } while (!computeErrorBounds(function, targetEpsilon));
     }
 
+    PositiveUpperBound<T> maximumError() const {
+        auto maximum = _errorBounds[0];
+
+        for (int i = 1; i < _errorBounds.size(); ++i) {
+            maximum = max(maximum, _errorBounds[i]);
+        }
+
+        return maximum;
+    }
+
     PositiveUpperBound<T> maximumErrorAt(const Bounds<T>& x) const {
         auto degree = (this->_coefficients).size() - 1;
         auto denominator = invert(T(degree, x.precision()));
@@ -40,8 +50,6 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
             if ((xl > x.upper() || xr < x.lower()).repr() >= LogicalValue::LIKELY)
                 continue;
-
-            std::cout << "t" << std::endl;
 
             maximum = max(maximum, _errorBounds[i]);
         }

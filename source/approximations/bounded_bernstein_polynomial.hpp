@@ -31,7 +31,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
     PositiveUpperBound<T> maximumErrorAt(const Bounds<T>& x) const {
         auto degree = (this->_coefficients).size() - 1;
-        Bounds<T> denominator = Bounds<T>(T(Approximation<T>(1 / static_cast<float>(degree), x.precision())));
+        auto denominator = invert(T(degree, x.precision()));
         auto maximum = PositiveUpperBound<T>(x.precision());
 
         for (size_t i = 0; i <= degree; ++i) {
@@ -55,8 +55,9 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         auto degree = (this->_coefficients).size() - 1;
         _errorBounds.clear();
         _errorBounds.reserve(degree);
-        T denominator = T(Approximation<T>(1 / static_cast<float>(degree), targetEpsilon.precision()));
-
+        auto denominator = invert(T(degree, targetEpsilon.precision()));
+        auto fDomain = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound<T>(1, targetEpsilon.precision()));
+        auto fRange = function(fDomain);
         for (size_t i = 1; i <= degree; ++i) {
             auto x = i * denominator;
             auto interval = Bounds<T>(LowerBound<T>((i - 1) * denominator), UpperBound<T>(x));
@@ -64,12 +65,16 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             auto originalBounds = function(interval);
             auto polynomialBounds = this->evaluate(interval);
 
-            auto maxError = mag(originalBounds - polynomialBounds);
+            polynomialBounds = refinement(polynomialBounds, fRange);
+
+            auto maxError = mag((originalBounds - polynomialBounds) * 5 / 4);
 
             std::cout << interval << std::endl;
             std::cout << originalBounds << std::endl;
             std::cout << polynomialBounds << std::endl;
             std::cout << maxError << std::endl
+                      << originalBounds - polynomialBounds << std::endl
+                      << degree << std::endl
                       << std::endl;
 
             if ((maxError > targetEpsilon).repr() >= LogicalValue::LIKELY)
@@ -79,6 +84,13 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         }
 
         return true;
+    }
+
+    static Bounds<T> invert(const Bounds<T>& x) {
+        return T(1, x.precision()) / x;
+    }
+    static Bounds<T> invert(const T& x) {
+        return T(1, x.precision()) / x;
     }
 
     std::vector<PositiveUpperBound<T>> _errorBounds{};

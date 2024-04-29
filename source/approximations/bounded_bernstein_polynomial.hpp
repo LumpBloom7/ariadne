@@ -11,22 +11,25 @@
 namespace Ariadne {
 template<typename T>
 class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
+    typedef typename T::RoundingModeType RND;
+    typedef typename T::PrecisionType PR;
+
   public:
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, int degree, size_t maxPrecision)
-        : BernsteinPolynomial<T>(function, degree, maxPrecision) {
-        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(MultiplePrecision(maxPrecision))));
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)>& function, DegreeType degree, PR precision)
+        : BernsteinPolynomial<T>(function, degree, precision) {
+        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision)));
     }
 
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> targetEpsilon)
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)>& function, const PositiveUpperBound<T>& targetEpsilon)
         : BernsteinPolynomial<T>({}) {
-        int degree = 1;
+        DegreeType degree = 1;
         do {
             this->generateCoefficients(function, degree, targetEpsilon.precision());
             degree *= 2;
         } while (!computeErrorBounds(function, targetEpsilon));
     }
 
-    PositiveUpperBound<T> maximumErrorAt(Bounds<T> x) const {
+    PositiveUpperBound<T> maximumErrorAt(const Bounds<T>& x) const {
         auto degree = (this->_coefficients).size() - 1;
         Bounds<T> denominator = Bounds<T>(T(Approximation<T>(1 / static_cast<float>(degree), x.precision())));
         auto maximum = PositiveUpperBound<T>(x.precision());
@@ -48,7 +51,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
   private:
-    bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> targetEpsilon) {
+    bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)>& function, const PositiveUpperBound<T>& targetEpsilon) {
         auto degree = (this->_coefficients).size() - 1;
         _errorBounds.clear();
         _errorBounds.reserve(degree);

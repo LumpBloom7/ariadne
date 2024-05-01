@@ -1,0 +1,8 @@
+#ifndef ARIADNE_MULTIVARIATE_BERNSTEIN
+#define ARIADNE_MULTIVARIATE_BERNSTEIN
+
+namespace Ariadne{
+    
+}
+
+#endif

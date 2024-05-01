@@ -23,10 +23,17 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)>& function, const PositiveUpperBound<T>& targetEpsilon)
         : BernsteinPolynomial<T>({}) {
         DegreeType degree = 1;
+
+        while (!earlyBoundsTest(function, degree, targetEpsilon)) {
+            degree *= 2;
+        }
+
+        std::cout << degree << std::endl;
+
         do {
             this->generateCoefficients(function, degree, targetEpsilon.precision());
             degree *= 2;
-        } while (!computeErrorBounds(function, targetEpsilon));
+        } while (!firstPassTest(function, targetEpsilon) || !computeErrorBounds(function, targetEpsilon));
     }
 
     PositiveUpperBound<T> maximumError() const {
@@ -59,6 +66,54 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
   private:
+    bool earlyBoundsTest(const std::function<Bounds<T>(Bounds<T>)>& function, DegreeType degree, const PositiveUpperBound<T>& targetEpsilon) {
+        auto denominator = invert(T(degree, targetEpsilon.precision()));
+        for (int i = 1; i <= degree; ++i) {
+            auto interval = Bounds<T>(LowerBound<T>((i - 1) * denominator), UpperBound<T>(i * denominator));
+
+            auto range = function(interval);
+            auto error = mag(range.upper().raw() - range.lower().raw());
+
+            std::cout << interval << std::endl;
+            std::cout << range << std::endl;
+            std::cout << error << std::endl
+                      << degree << std::endl
+                      << std::endl;
+
+            if ((error > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
+                return false;
+        }
+
+        return true;
+    }
+
+    bool firstPassTest(const std::function<Bounds<T>(Bounds<T>)>& function, const PositiveUpperBound<T>& targetEpsilon) {
+        auto degree = (this->_coefficients).size() - 1;
+        auto denominator = invert(T(degree, targetEpsilon.precision()));
+
+        for (int i = 1; i < degree; ++i) {
+            auto x = i * denominator;
+
+            auto actual = function(x);
+            auto predicted = this->evaluate(x);
+
+            auto maxError = mag(actual - predicted);
+
+/*             std::cout << x << std::endl;
+            std::cout << actual << std::endl;
+            std::cout << predicted << std::endl;
+            std::cout << maxError << std::endl
+                      << degree << std::endl
+                      << std::endl; */
+
+            if ((maxError > targetEpsilon).repr() >= LogicalValue::INDETERMINATE) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)>& function, const PositiveUpperBound<T>& targetEpsilon) {
         auto degree = (this->_coefficients).size() - 1;
         _errorBounds.clear();
@@ -76,7 +131,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             polynomialBounds = refinement(polynomialBounds, fRange);
 
             auto maxError = mag((originalBounds - polynomialBounds) * 5 / 4);
-
+/* 
             std::cout << interval << std::endl;
             std::cout << originalBounds << std::endl;
             std::cout << polynomialBounds << std::endl;
@@ -84,7 +139,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
                       << originalBounds - polynomialBounds << std::endl
                       << degree << std::endl
                       << std::endl;
-
+ */
             if ((maxError > targetEpsilon).repr() >= LogicalValue::LIKELY)
                 return false;
 

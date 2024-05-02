@@ -46,6 +46,7 @@ namespace Ariadne {
 #include "approximations/bernstein_polynomial.hpp"
 #include "approximations/bounded_bernstein_polynomial.hpp"
 #include "approximations/chebyshev_polynomial.hpp"
+#include "approximations/multivariate_bernstein.hpp"
 
 #include "function/function.hpp"
 #include "function/taylor_model.hpp"

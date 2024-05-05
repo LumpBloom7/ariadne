@@ -19,7 +19,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
   public:
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision)
         : BernsteinPolynomial<T>(function, degree, precision) {
-        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision)));
+        test(function, PositiveUpperBound<T>(T::inf(precision)));
     }
 
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon)
@@ -42,7 +42,6 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             this->generateCoefficients(function, degree, targetEpsilon.precision());
             degree *= 2;
 
-            std::cout << degree << std::endl;
         } while (/* !endpointTest(function, targetEpsilon) || */ !test(function, targetEpsilon));
     }
 
@@ -70,7 +69,6 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
             maximum = max(maximum, _errorBounds[i]);
         }
-        std::cout << std::endl;
 
         return maximum;
     }
@@ -102,7 +100,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         auto centreX = centre * denominator;
 
         // I evaluate error bounds from the center of our domain first
-        // This is to take advantage of the fact that the BernsteinPolynomial tends to 
+        // This is to take advantage of the fact that the BernsteinPolynomial tends to
 
         for (int i = 1; i < degree / 2 + 1; ++i) {
             for (int j = 0; j < 2; ++j) {
@@ -163,7 +161,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             auto originalBounds = function(interval);
             auto polynomialBounds = this->evaluate(interval);
 
-            polynomialBounds = refinement(polynomialBounds, fRange);
+            //polynomialBounds = refinement(polynomialBounds, fRange);
 
             auto maxError = mag((originalBounds - polynomialBounds) * 5 / 4);
 

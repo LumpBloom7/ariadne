@@ -70,17 +70,17 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
         Bounds<T> denominator = T(1, precision) / T(degree, precision);
         for (size_t i = 0; i <= degree; ++i) {
+
+            int v2 = (i * 2 >= degree) ? (degree - i) : i;
             auto x = i * denominator;
-            auto res = function(x);
+            auto res = function(x) *  binomialCoefficients(degree, v2);
 
             _coefficients.emplace_back(res);
         }
     }
 
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T>& x) {
-        int v2 = (v * 2 >= n) ? (n - v) : v; // Used to avoid computing extra redundant values in binomial cache
-
-        return binomialCoefficients(n, v2) * pow(x.value(), v) * pow(1 - x.value(), n - v);
+        return pow(x.value(), v) * pow(1 - x.value(), n - v);
     }
     std::vector<Bounds<T>> _coefficients{};
 };

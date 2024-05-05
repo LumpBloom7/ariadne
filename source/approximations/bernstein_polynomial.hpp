@@ -40,10 +40,19 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     Bounds<T> evaluate(const Bounds<T>& x) const {
         auto sum = Bounds<T>(x.precision());
 
-        auto degree = _coefficients.size() - 1;
+        Nat degree = _coefficients.size() - 1;
+
+        auto OneMinX = 1 - x;
+
+        auto xPow = pow(x, 0);
+        auto xMinPow = pow(OneMinX, degree);
+
         for (size_t i = 0; i <= degree; ++i) {
-            auto bp = bernsteinBasisPolynomialFor(i, degree, x);
+            auto bp = xPow * xMinPow;
             sum = fma(bp, _coefficients[i], sum);
+
+            xPow *= x;
+            xMinPow /= OneMinX;
         }
 
         return sum;
@@ -70,10 +79,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
         Bounds<T> denominator = T(1, precision) / T(degree, precision);
         for (size_t i = 0; i <= degree; ++i) {
-
             int v2 = (i * 2 >= degree) ? (degree - i) : i;
             auto x = i * denominator;
-            auto res = function(x) *  binomialCoefficients(degree, v2);
+            auto res = function(x) * binomialCoefficients(degree, v2);
 
             _coefficients.emplace_back(res);
         }

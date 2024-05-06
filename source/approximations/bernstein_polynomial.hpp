@@ -38,25 +38,14 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     }
 
     Bounds<T> evaluate(const Bounds<T>& x) const {
-        auto sum = Bounds<T>(x.precision());
+        auto y1 = evaluate_impl(x.lower_raw());
+        auto y2 = evaluate_impl(x.upper_raw());
 
-        Nat degree = _coefficients.size() - 1;
-
-        auto OneMinX = 1 - x;
-
-        auto xPow = pow(x, 0);
-        auto xMinPow = pow(OneMinX, degree);
-
-        for (size_t i = 0; i <= degree; ++i) {
-            auto bp = xPow * xMinPow;
-            sum = fma(bp, _coefficients[i], sum);
-
-            xPow *= x;
-            xMinPow /= OneMinX;
-        }
-
-        return sum;
-    };
+        auto res = Bounds<T>(
+            min(y1.lower(), y2.lower()),
+            max(y1.upper(), y2.upper()));
+        return res;
+    }
 
     Bounds<T> DeCasteljau(const Bounds<T>& x) const {
         std::vector<Bounds<T>> beta = std::vector<Bounds<T>>(_coefficients);
@@ -73,6 +62,33 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     Bounds<T> operator()(const Bounds<T>& x) const { return evaluate(x); }
 
   protected:
+    Bounds<T> evaluate_impl(const T& x) const {
+        if ((x >= 1).repr() >= LogicalValue::LIKELY)
+            return *(_coefficients.end() - 1);
+        else if ((x <= 0).repr() >= LogicalValue::LIKELY)
+            return _coefficients[0];
+
+        auto zero = Bounds<T>(x.precision());
+        auto sum = zero;
+
+        Nat degree = _coefficients.size() - 1;
+
+        auto OneMinX = 1 - x;
+
+        auto xPow = pow(x, 0);
+        auto xMinPow = pow(OneMinX, degree);
+
+        for (size_t i = 0; i <= degree; ++i) {
+            auto bp = xPow * xMinPow;
+            sum = fma(bp, _coefficients[i], sum);
+
+            xPow *= x;
+            xMinPow = safeDiv(xMinPow, OneMinX);
+        }
+        
+        return sum;
+    }
+
     void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)>& function, DegreeType degree, PR precision) {
         _coefficients.clear();
         _coefficients.reserve(degree + 1);
@@ -90,7 +106,19 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T>& x) {
         return pow(x.value(), v) * pow(1 - x.value(), n - v);
     }
+
     std::vector<Bounds<T>> _coefficients{};
+
+    static bool straddles(const Bounds<T>& range, const FloatMP& point) {
+        return (range.upper_raw() >= point && range.lower_raw() <= point).repr() >= LogicalValue::LIKELY;
+    }
+
+    static Bounds<T> safeDiv(const Bounds<T>& x, const Bounds<T>& y) {
+        if ((x == y).repr() >= LogicalValue::LIKELY)
+            return Bounds<T>(1, min(x.precision(), y.precision()));
+
+        return x / y;
+    }
 };
 } // namespace Ariadne
 

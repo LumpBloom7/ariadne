@@ -19,7 +19,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
   public:
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision)
         : BernsteinPolynomial<T>(function, degree, precision) {
-        test(function, PositiveUpperBound<T>(T::inf(precision)));
+        test2(function, PositiveUpperBound<T>(T::inf(precision)));
     }
 
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon)
@@ -34,6 +34,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         std::clog << "EARLY PASS DONE" << std::endl;
 
         do {
+            std::cout << degree << std::endl;
             if (degree == 0) {
                 std::clog << "Unable to increase degree past 2^16, bailing out. Error bounds will be based on the previous degree tested." << std::endl;
                 break;
@@ -42,7 +43,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             this->generateCoefficients(function, degree, targetEpsilon.precision());
             degree *= 2;
 
-        } while (/* !endpointTest(function, targetEpsilon) || */ !test(function, targetEpsilon));
+        } while (/* !endpointTest(function, targetEpsilon) || */ !test2(function, targetEpsilon));
     }
 
     PositiveUpperBound<T> maximumError() const {
@@ -84,6 +85,60 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
             if ((error > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
                 return false;
+        }
+
+        return true;
+    }
+
+    bool test2(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
+        auto degree = (this->_coefficients).size() - 1;
+
+        auto denominator = invert(T(degree, targetEpsilon.precision()));
+
+        auto rightXBounds = T(1, targetEpsilon.precision());
+        Bounds<T> leftX = T(targetEpsilon.precision());
+        Bounds<T> rightX = leftX + denominator;
+        auto leftVal = this->evaluate(leftX);
+        auto rightVal = this->evaluate(rightX);
+
+        for (int i = 1; i <= degree; ++i) {
+            auto minimum = min(leftVal, rightVal);
+            auto maximum = max(leftVal, rightVal);
+
+            auto domain = Bounds<T>(LowerBound<T>(leftX), UpperBound<T>(min(rightX, rightXBounds)));
+            auto actual = function(domain);
+            auto predicted = Bounds<T>(LowerBound<T>(minimum), UpperBound<T>(maximum));
+
+            auto errorBounds = actual - predicted;
+
+            auto bA = actual.upper_raw() - minimum;
+            auto bB = actual.lower_raw() - maximum;
+
+            auto errorBoundsManual = Bounds<T>(LowerBound<T>(min(bA, bB)), UpperBound<T>(max(bA, bB)));
+
+            /*             std::cout << "Domain: " << domain << std::endl;
+                        std::cout << "Error Bounds: " << errorBounds << std::endl;
+                        std::cout << "Error Bounds (Manual): " << errorBoundsManual << std::endl; */
+
+            auto errorUpperBound = mag(errorBoundsManual);
+            if ((errorUpperBound > 5).repr() >= LogicalValue::INDETERMINATE) {
+                throw std::runtime_error("STUFF");
+            }
+
+            if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE) {
+                std::cout << errorUpperBound << std::endl;
+                std::cout << targetEpsilon << std::endl;
+                return false;
+            }
+
+            _errorBounds.emplace_back(errorUpperBound);
+
+            // Prep for next iteration
+            leftX = rightX;
+            rightX += denominator;
+
+            leftVal = rightVal;
+            rightVal = this->evaluate(rightX);
         }
 
         return true;
@@ -161,7 +216,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             auto originalBounds = function(interval);
             auto polynomialBounds = this->evaluate(interval);
 
-            //polynomialBounds = refinement(polynomialBounds, fRange);
+            // polynomialBounds = refinement(polynomialBounds, fRange);
 
             auto maxError = mag((originalBounds - polynomialBounds) * 5 / 4);
 

@@ -85,7 +85,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             xPow *= x;
             xMinPow = safeDiv(xMinPow, OneMinX);
         }
-        
+
         return sum;
     }
 

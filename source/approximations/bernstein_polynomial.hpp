@@ -83,7 +83,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             sum = fma(bp, _coefficients[i], sum);
 
             xPow *= x;
-            xMinPow = safeDiv(xMinPow, OneMinX);
+            xMinPow /= OneMinX;
         }
 
         return sum;
@@ -111,13 +111,6 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
     static bool straddles(const Bounds<T>& range, const FloatMP& point) {
         return (range.upper_raw() >= point && range.lower_raw() <= point).repr() >= LogicalValue::LIKELY;
-    }
-
-    static Bounds<T> safeDiv(const Bounds<T>& x, const Bounds<T>& y) {
-        if ((x == y).repr() >= LogicalValue::LIKELY)
-            return Bounds<T>(1, min(x.precision(), y.precision()));
-
-        return x / y;
     }
 };
 } // namespace Ariadne

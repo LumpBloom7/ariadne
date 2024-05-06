@@ -61,14 +61,18 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         auto denominator = invert(T(degree, x.precision()));
         auto maximum = PositiveUpperBound<T>(x.precision());
 
-        for (size_t i = 0; i <= degree; ++i) {
-            auto xl = i * denominator;
-            auto xr = (i + 1) * denominator;
+        auto xr = 0 * denominator;
 
-            if ((xl > x.upper() || xr < x.lower()).repr() >= LogicalValue::LIKELY)
+        for (size_t i = 0; i <= degree; ++i) {
+            xr += denominator;
+
+            if ((x.lower() >= xr).repr() >= LogicalValue::LIKELY)
                 continue;
 
             maximum = max(maximum, _errorBounds[i]);
+
+            if ((x.upper() <= xr).repr() >= LogicalValue::LIKELY)
+                break;
         }
 
         return maximum;
@@ -93,6 +97,9 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     bool test2(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
         auto degree = (this->_coefficients).size() - 1;
 
+        _errorBounds.clear();
+        _errorBounds.reserve(degree);
+
         auto denominator = invert(T(degree, targetEpsilon.precision()));
 
         auto rightXBounds = T(1, targetEpsilon.precision());
@@ -102,8 +109,8 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         auto rightVal = this->evaluate(rightX);
 
         for (int i = 1; i <= degree; ++i) {
-            auto minimum = min(leftVal, rightVal);
-            auto maximum = max(leftVal, rightVal);
+            auto minimum = min(leftVal.lower_raw(), rightVal.lower_raw());
+            auto maximum = max(leftVal.upper_raw(), rightVal.upper_raw());
 
             auto domain = Bounds<T>(LowerBound<T>(leftX), UpperBound<T>(min(rightX, rightXBounds)));
             auto actual = function(domain);
@@ -111,25 +118,10 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
             auto errorBounds = actual - predicted;
 
-            auto bA = actual.upper_raw() - minimum;
-            auto bB = actual.lower_raw() - maximum;
+            auto errorUpperBound = mag(errorBounds);
 
-            auto errorBoundsManual = Bounds<T>(LowerBound<T>(min(bA, bB)), UpperBound<T>(max(bA, bB)));
-
-            /*             std::cout << "Domain: " << domain << std::endl;
-                        std::cout << "Error Bounds: " << errorBounds << std::endl;
-                        std::cout << "Error Bounds (Manual): " << errorBoundsManual << std::endl; */
-
-            auto errorUpperBound = mag(errorBoundsManual);
-            if ((errorUpperBound > 5).repr() >= LogicalValue::INDETERMINATE) {
-                throw std::runtime_error("STUFF");
-            }
-
-            if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE) {
-                std::cout << errorUpperBound << std::endl;
-                std::cout << targetEpsilon << std::endl;
+            if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
                 return false;
-            }
 
             _errorBounds.emplace_back(errorUpperBound);
 
@@ -238,10 +230,10 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     static Bounds<T> invert(const Bounds<T> &x) {
-        return T(1, x.precision()) / x;
+        return 1 / x;
     }
     static Bounds<T> invert(const T &x) {
-        return T(1, x.precision()) / x;
+        return 1 / x;
     }
 
     std::vector<PositiveUpperBound<T>> _errorBounds{};

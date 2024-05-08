@@ -143,36 +143,43 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
-        Bounds<T> res = x;
+        T s[]{
+            x.lower_raw(),
+            x.upper_raw()};
 
-        while ((x.error_raw() > targetEpsilon).repr() >= LogicalValue::LIKELY)
-            res = secantMethod_impl(res);
+        while ((mag(s[1] - s[0]) > targetEpsilon).repr() >= LogicalValue::LIKELY)
+            secantMethod_impl(s);
 
-        return res;
+        auto mini = min(s[0], s[1]);
+        auto maxi = max(s[0], s[1]);
+
+        return Bounds<T>(LowerBound<T>(mini), UpperBound<T>(maxi));
     }
 
     Bounds<T> secantMethod(const Bounds<T> &x, int iterations = 1) const {
-        Bounds<T> res = x;
+        T s[]{
+            x.lower_raw(),
+            x.upper_raw()};
 
         for (int i = 0; i < iterations; ++i)
-            res = secantMethod_impl(res);
+            secantMethod_impl(s);
 
-        return res;
+        auto mini = min(s[0], s[1]);
+        auto maxi = max(s[0], s[1]);
+
+        return Bounds<T>(LowerBound<T>(mini), UpperBound<T>(maxi));
     }
 
-    Bounds<T> secantMethod_impl(const Bounds<T> &x) const {
-        auto left = x.lower_raw();
-        auto right = x.upper_raw();
+    void secantMethod_impl(T (&x)[2]) const {
+        auto left = x[0];
+        auto right = x[1];
 
         auto rightDeriv = this->evaluate_deriv_impl(right);
         auto leftDeriv = this->evaluate_deriv_impl(left);
 
         auto res = right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv));
-
-        auto ResLowerBound = LowerBound<T>(min(right, res.lower_raw()));
-        auto ResUpperBound = UpperBound<T>(max(right, res.upper_raw()));
-
-        return Bounds<T>(ResLowerBound, ResUpperBound);
+        x[0] = x[1];
+        x[1] = res.value();
     }
 
     std::vector<PositiveUpperBound<T>> _errorBounds{};

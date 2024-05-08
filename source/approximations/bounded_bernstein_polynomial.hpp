@@ -17,9 +17,9 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     typedef typename T::PrecisionType PR;
 
   public:
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision)
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIterations)
         : BernsteinPolynomial<T>(function, degree, precision) {
-        test2(function, PositiveUpperBound<T>(T::inf(precision)));
+        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision)), secantIterations);
     }
 
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon)
@@ -43,7 +43,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             this->generateCoefficients(function, degree, targetEpsilon.precision());
             degree *= 2;
 
-        } while (/* !endpointTest(function, targetEpsilon) || */ !test2(function, targetEpsilon));
+        } while (/* !endpointTest(function, targetEpsilon) || */ !computeErrorBounds(function, targetEpsilon));
     }
 
     PositiveUpperBound<T> maximumError() const {
@@ -94,7 +94,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         return true;
     }
 
-    bool test2(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
+    bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon, int secantIterations = -1) {
         auto degree = (this->_coefficients).size() - 1;
 
         _errorBounds.clear();
@@ -102,18 +102,22 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
         auto denominator = invert(T(degree, targetEpsilon.precision()));
 
-        auto rightXBounds = T(1, targetEpsilon.precision());
-        Bounds<T> leftX = T(targetEpsilon.precision());
-        Bounds<T> rightX = leftX + denominator;
-        auto leftVal = this->evaluate(leftX);
-        auto rightVal = this->evaluate(rightX);
+        auto x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound<T>(denominator));
 
         for (int i = 1; i <= degree; ++i) {
-            auto minimum = min(leftVal.lower_raw(), rightVal.lower_raw());
-            auto maximum = max(leftVal.upper_raw(), rightVal.upper_raw());
+            Bounds<T> criticalPoint = secantIterations < 0 ? secantMethod(x, targetEpsilon) : secantMethod(x, secantIterations);
 
-            auto domain = Bounds<T>(LowerBound<T>(leftX), UpperBound<T>(min(rightX, rightXBounds)));
-            auto actual = function(domain);
+            criticalPoint = Bounds<T>(
+                models(x, criticalPoint.lower_raw()) ? criticalPoint.lower() : x.lower(),
+                models(x, criticalPoint.upper_raw()) ? criticalPoint.upper() : x.upper());
+
+            auto xVal = this->evaluate(x);
+            auto critVal = this->evaluate(criticalPoint);
+
+            auto minimum = min(xVal.lower_raw(), critVal.lower_raw());
+            auto maximum = max(xVal.upper_raw(), critVal.upper_raw());
+
+            auto actual = function(x);
             auto predicted = Bounds<T>(LowerBound<T>(minimum), UpperBound<T>(maximum));
 
             auto errorBounds = actual - predicted;
@@ -125,105 +129,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
             _errorBounds.emplace_back(errorUpperBound);
 
-            // Prep for next iteration
-            leftX = rightX;
-            rightX += denominator;
-
-            leftVal = rightVal;
-            rightVal = this->evaluate(rightX);
-        }
-
-        return true;
-    }
-
-    bool test(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
-        auto degree = (this->_coefficients).size() - 1;
-
-        std::deque<PositiveUpperBound<T>> queue = {};
-        auto denominator = invert(T(degree, targetEpsilon.precision()));
-
-        auto intervalDomain = Bounds<T>(LowerBound<T>(targetEpsilon.precision()), UpperBound<T>(denominator));
-        auto centre = (degree / 2 + 1);
-        auto centreX = centre * denominator;
-
-        // I evaluate error bounds from the center of our domain first
-        // This is to take advantage of the fact that the BernsteinPolynomial tends to
-
-        for (int i = 1; i < degree / 2 + 1; ++i) {
-            for (int j = 0; j < 2; ++j) {
-                int factor = 1 - j * 2;
-                auto iF = (i * factor);
-
-                if ((iF + centre) > degree || (iF + centre) < 0)
-                    continue;
-
-                auto x = centreX + (iF * denominator + intervalDomain);
-
-                auto actual = function(x);
-                auto predicted = this->evaluate(x);
-
-                auto maxError = mag((actual - predicted) * 5 / 4);
-                /*
-                                std::cout << x << std::endl;
-                                std::cout << iF << std::endl;
-                                std::cout << actual << std::endl;
-                                std::cout << predicted << std::endl;
-                                std::cout << maxError << std::endl
-                                          << degree << std::endl
-                                          << std::endl;
-                 */
-                if ((maxError > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
-                    return false;
-
-                if (factor > 0)
-                    queue.emplace_back(maxError);
-                else
-                    queue.emplace_front(maxError);
-            }
-        }
-
-        _errorBounds.clear();
-        _errorBounds.reserve(degree);
-        while (!queue.empty()) {
-            _errorBounds.emplace_back(queue.front());
-            queue.pop_front();
-        };
-
-        return true;
-    }
-
-    bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
-        auto degree = (this->_coefficients).size() - 1;
-        _errorBounds.clear();
-        _errorBounds.reserve(degree);
-
-        auto denominator = invert(T(degree, targetEpsilon.precision()));
-        auto fDomain = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound<T>(1, targetEpsilon.precision()));
-        auto fRange = function(fDomain);
-
-        for (int i = 1; i <= degree; ++i) {
-            auto x = i * denominator;
-            auto interval = Bounds<T>(LowerBound<T>((i - 1) * denominator), UpperBound<T>(x));
-
-            auto originalBounds = function(interval);
-            auto polynomialBounds = this->evaluate(interval);
-
-            // polynomialBounds = refinement(polynomialBounds, fRange);
-
-            auto maxError = mag((originalBounds - polynomialBounds) * 5 / 4);
-
-            std::cout << interval << std::endl;
-            std::cout << originalBounds << std::endl;
-            std::cout << polynomialBounds << std::endl;
-            std::cout << maxError << std::endl
-                      << originalBounds - polynomialBounds << std::endl
-                      << degree << std::endl
-                      << std::endl;
-
-            if ((maxError > targetEpsilon).repr() >= LogicalValue::LIKELY)
-                return false;
-
-            _errorBounds.emplace_back(maxError);
+            x += denominator;
         }
 
         return true;
@@ -234,6 +140,39 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
     static Bounds<T> invert(const T &x) {
         return 1 / x;
+    }
+
+    Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
+        Bounds<T> res = x;
+
+        while ((x.error_raw() > targetEpsilon).repr() >= LogicalValue::LIKELY)
+            res = secantMethod_impl(res);
+
+        return res;
+    }
+
+    Bounds<T> secantMethod(const Bounds<T> &x, int iterations = 1) const {
+        Bounds<T> res = x;
+
+        for (int i = 0; i < iterations; ++i)
+            res = secantMethod_impl(res);
+
+        return res;
+    }
+
+    Bounds<T> secantMethod_impl(const Bounds<T> &x) const {
+        auto left = x.lower_raw();
+        auto right = x.upper_raw();
+
+        auto rightDeriv = this->evaluate_deriv_impl(right);
+        auto leftDeriv = this->evaluate_deriv_impl(left);
+
+        auto res = right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv));
+
+        auto ResLowerBound = LowerBound<T>(min(right, res.lower_raw()));
+        auto ResUpperBound = UpperBound<T>(max(right, res.upper_raw()));
+
+        return Bounds<T>(ResLowerBound, ResUpperBound);
     }
 
     std::vector<PositiveUpperBound<T>> _errorBounds{};

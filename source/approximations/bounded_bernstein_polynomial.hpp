@@ -109,10 +109,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             auto actual = function(x);
             auto predicted = this->evaluate(x);
 
-            auto errorUpper = mag(actual.upper_raw() - predicted.upper_raw());
-            auto errorLower = mag(actual.lower_raw() - predicted.lower_raw());
-
-            auto errorUpperBound = max(errorUpper, errorLower);
+            auto errorUpperBound = mag(actual-predicted);
 
             if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
                 return false;

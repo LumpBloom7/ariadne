@@ -218,7 +218,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             x.upper_raw()};
 
         while ((mag(s[1] - s[0]) > targetEpsilon).repr() >= LogicalValue::LIKELY)
-            secantMethod_impl(s);
+            if (!secantMethod_impl(s))
+                break;
+        ;
 
         auto mini = min(s[0], s[1]);
         auto maxi = max(s[0], s[1]);
@@ -232,7 +234,8 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             x.upper_raw()};
 
         for (int i = 0; i < iterations; ++i)
-            secantMethod_impl(s);
+            if (!secantMethod_impl(s))
+                break;
 
         auto mini = min(s[0], s[1]);
         auto maxi = max(s[0], s[1]);
@@ -240,7 +243,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return Bounds<T>(LowerBound<T>(mini), UpperBound<T>(maxi));
     }
 
-    void secantMethod_impl(T (&x)[2]) const {
+    bool secantMethod_impl(T (&x)[2]) const {
         auto left = x[0];
         auto right = x[1];
 
@@ -248,8 +251,13 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto leftDeriv = this->evaluate_deriv_impl(left);
 
         auto res = right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv));
+
+        if (is_nan(res.value()))
+            return false;
+
         x[0] = x[1];
         x[1] = res.value();
+        return true;
     }
 
     std::vector<Bounds<T>> _coefficients{};

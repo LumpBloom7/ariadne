@@ -32,8 +32,12 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     typedef typename T::PrecisionType PR;
 
   public:
+    const PR precision;
+    const DegreeType degree;
+
     BernsteinPolynomial(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients} {}
-    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5) {
+    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
+        : precision(precision), degree(degree), degreeReciprocal(rec(T(degree, precision))) {
         generateCoefficients(function, degree, precision);
         findCriticalPoints(degree, precision, secantIters);
     }
@@ -43,16 +47,19 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto y2 = evaluate_impl(x.upper_raw());
 
         auto res = Bounds<T>(
-            min(y1.lower(), y2.lower()),
-            max(y1.upper(), y2.upper()));
+            LowerBound<T>(min(y1.lower_raw(), y2.lower_raw())),
+            UpperBound<T>(max(y1.upper_raw(), y2.upper_raw())));
 
         for (const CriticalPoint &criticalPoint: _criticalPoints) {
-            if (!models(x, criticalPoint.xPosition))
+            if (decide(criticalPoint.xPosition > x.upper_raw()))
+                break;
+
+            if(criticalPoint.xPosition < x.lower_raw())
                 continue;
 
             res = Bounds<T>(
-                min(res.lower(), criticalPoint.value.lower()),
-                max(res.upper(), criticalPoint.value.upper()));
+                LowerBound<T>(min(res.lower_raw(), criticalPoint.value.lower_raw())),
+                UpperBound<T>(max(res.upper_raw(), criticalPoint.value.upper_raw())));
         }
 
         return res;
@@ -63,8 +70,8 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto y2 = evaluate_deriv_impl(x.upper_raw());
 
         auto res = Bounds<T>(
-            min(y1.lower(), y2.lower()),
-            max(y1.upper(), y2.upper()));
+            LowerBound<T>(min(y1.lower_raw(), y2.lower_raw())),
+            UpperBound<T>(max(y1.upper(), y2.upper())));
         return res;
     }
 
@@ -92,9 +99,8 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto zero = Bounds<T>(x.precision());
         auto sum = zero;
 
-        Nat degree = _coefficients.size() - 1;
-
         auto OneMinX = 1 - x;
+        auto oneMinXRec = rec(OneMinX);
 
         auto xPow = pow(x, 0);
         auto xMinPow = pow(OneMinX, degree);
@@ -104,7 +110,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             sum = fma(bp, _coefficients[i], sum);
 
             xPow *= x;
-            xMinPow /= OneMinX;
+            xMinPow *= oneMinXRec;
         }
 
         return sum;
@@ -120,9 +126,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         // b_(k,n)'(x) = (nCk) * x^(k-1) * (1-x)^(n-k)*  (k-nx)
         auto zero = Bounds<T>(x.precision());
         auto sum = zero;
-        Nat degree = _coefficients.size() - 1;
 
         auto OneMinX = 1 - x;
+        auto oneMinXRec = rec(OneMinX);
 
         auto xPow = 1 / x;
         auto xMinPow = pow(OneMinX, degree - 1);
@@ -135,7 +141,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             sum = fma(bp, _coefficients[i], sum);
 
             xPow *= x;
-            xMinPow /= OneMinX;
+            xMinPow *= oneMinXRec;
         }
 
         return sum;
@@ -145,21 +151,21 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         _coefficients.clear();
         _coefficients.reserve(degree + 1);
 
-        Bounds<T> denominator = T(1, precision) / T(degree, precision);
+        Bounds<T> x = 0 * degreeReciprocal;
         for (size_t i = 0; i <= degree; ++i) {
             int v2 = (i * 2 >= degree) ? (degree - i) : i;
-            auto x = i * denominator;
             auto res = function(x) * binomialCoefficients(degree, v2);
 
             _coefficients.emplace_back(res);
+            x += degreeReciprocal;
         }
 
         {
             auto b = binomialCoefficients(degree, 1);
 
             _derivativeEndpoints = {
-                (function(denominator) - function(0 * denominator)) * b,
-                (function((degree - 1) * denominator) - function(degree * denominator)) * b,
+                (function(degreeReciprocal) - function(0 * degreeReciprocal)) * b,
+                (function((degree - 1) * degreeReciprocal) - function(degree * degreeReciprocal)) * b,
             };
         }
     }
@@ -167,11 +173,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     void findCriticalPoints(DegreeType degree, PR precision, int secantIterations = 5) {
         _criticalPoints.clear();
 
-        Bounds<T> denominator = T(1, precision) / T(degree, precision);
+        Bounds<T> x = Bounds<T>(LowerBound<T>(0, precision), UpperBound(degreeReciprocal));
 
-        Bounds<T> x = Bounds<T>(LowerBound<T>(0, precision), UpperBound(denominator));
-
-        for (size_t i = 1; i <= degree; ++i, x += denominator) {
+        for (size_t i = 1; i <= degree; ++i, x += degreeReciprocal) {
             Bounds<T> criticalPoint = secantMethod(x, secantIterations);
 
             T critX = criticalPoint.value_raw();
@@ -188,9 +192,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     void findCriticalPoints(DegreeType degree, const PositiveUpperBound<T> &targetEpsilon) {
         _criticalPoints.clear();
 
-        Bounds<T> denominator = T(1, targetEpsilon.precision()) / T(degree, targetEpsilon.precision());
-
-        Bounds<T> x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound(denominator));
+        Bounds<T> x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound(degreeReciprocal));
 
         for (size_t i = 1; i <= degree; ++i) {
             Bounds<T> criticalPoint = secantMethod(x, targetEpsilon);
@@ -204,7 +206,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
             _criticalPoints.emplace_back(CriticalPoint(critX, value));
 
-            x += denominator;
+            x += degreeReciprocal;
         }
     }
 
@@ -217,8 +219,10 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             x.lower_raw(),
             x.upper_raw()};
 
+        auto leftval = this->evaluate_deriv_impl(s[0]);
+
         while ((mag(s[1] - s[0]) > targetEpsilon).repr() >= LogicalValue::LIKELY)
-            if (!secantMethod_impl(s))
+            if (!secantMethod_impl(s, leftval))
                 break;
         ;
 
@@ -233,8 +237,10 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             x.lower_raw(),
             x.upper_raw()};
 
+        auto leftval = this->evaluate_deriv_impl(s[0]);
+
         for (int i = 0; i < iterations; ++i)
-            if (!secantMethod_impl(s))
+            if (!secantMethod_impl(s, leftval))
                 break;
 
         auto mini = min(s[0], s[1]);
@@ -243,25 +249,26 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return Bounds<T>(LowerBound<T>(mini), UpperBound<T>(maxi));
     }
 
-    bool secantMethod_impl(T (&x)[2]) const {
+    bool secantMethod_impl(T (&x)[2], Bounds<T> &leftDeriv) const {
         auto left = x[0];
         auto right = x[1];
 
         auto rightDeriv = this->evaluate_deriv_impl(right);
-        auto leftDeriv = this->evaluate_deriv_impl(left);
 
-        auto res = right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv));
+        auto res = (right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv))).value();
 
-        if (is_nan(res.value()))
+        if (is_nan(res))
             return false;
 
         x[0] = x[1];
-        x[1] = res.value();
+        x[1] = res;
+        leftDeriv = rightDeriv;
         return true;
     }
 
     std::vector<Bounds<T>> _coefficients{};
     std::vector<Bounds<T>> _derivativeEndpoints;
+    Bounds<T> degreeReciprocal;
 
     struct CriticalPoint {
         CriticalPoint(T xPos, Bounds<T> val) : xPosition(xPos), value(val) {}

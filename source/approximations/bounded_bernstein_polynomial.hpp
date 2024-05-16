@@ -19,15 +19,18 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
   public:
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIterations = 5)
         : BernsteinPolynomial<T>(function, degree, precision, secantIterations) {
+        this->degreeReciprocal = rec(T(degree, precision));
         computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision)));
     }
 
     BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon)
         : BernsteinPolynomial<T>({}) {
         DegreeType degree = 1;
+        this->degreeReciprocal = rec(T(degree, precision));
 
         while (!earlyBoundsTest(function, degree, targetEpsilon)) {
             degree *= 2;
+            this->degreeReciprocal = rec(T(degree, precision));
             std::cout << degree << std::endl;
         }
 
@@ -43,6 +46,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             this->generateCoefficients(function, degree, targetEpsilon.precision());
             this->findCriticalPoints(degree, targetEpsilon);
             degree *= 2;
+            this->degreeReciprocal = rec(T(degree, precision));
 
         } while (/* !endpointTest(function, targetEpsilon) || */ !computeErrorBounds(function, targetEpsilon));
     }
@@ -58,21 +62,20 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
-        auto degree = (this->_coefficients).size() - 1;
-        auto denominator = invert(T(degree, x.precision()));
+        auto& degree = this->degree;
         auto maximum = PositiveUpperBound<T>(x.precision());
 
-        auto xr = 0 * denominator;
+        auto xr = 0 * this->degreeReciprocal;
 
         for (size_t i = 0; i <= degree; ++i) {
-            xr += denominator;
+            xr += this->degreeReciprocal;
 
-            if ((x.lower() >= xr).repr() >= LogicalValue::LIKELY)
+            if ((x.lower_raw() >= xr).repr() >= LogicalValue::LIKELY)
                 continue;
 
             maximum = max(maximum, _errorBounds[i]);
 
-            if ((x.upper() <= xr).repr() >= LogicalValue::LIKELY)
+            if ((x.upper_raw() <= xr).repr() >= LogicalValue::LIKELY)
                 break;
         }
 
@@ -81,12 +84,12 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
   private:
     bool earlyBoundsTest(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, const PositiveUpperBound<T> &targetEpsilon) {
-        auto denominator = invert(T(degree, targetEpsilon.precision()));
+        auto &degreeReciprocal = this->degreeReciprocal;
         for (int i = 1; i <= degree; ++i) {
-            auto interval = Bounds<T>(LowerBound<T>((i - 1) * denominator), UpperBound<T>(i * denominator));
+            auto interval = Bounds<T>(LowerBound<T>((i - 1) * degreeReciprocal), UpperBound<T>(i * degreeReciprocal));
 
             auto range = function(interval);
-            auto error = mag(range.upper().raw() - range.lower().raw());
+            auto error = mag(range.upper_raw() - range.lower_raw());
 
             if ((error > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
                 return false;
@@ -96,37 +99,29 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
-        auto degree = (this->_coefficients).size() - 1;
+        auto& degree = this->degree;
 
         _errorBounds.clear();
         _errorBounds.reserve(degree);
 
-        auto denominator = invert(T(degree, targetEpsilon.precision()));
-
-        auto x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound<T>(denominator));
+        auto &degreeReciprocal = this->degreeReciprocal;
+        auto x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound<T>(degreeReciprocal));
 
         for (int i = 1; i <= degree; ++i) {
             auto actual = function(x);
             auto predicted = this->evaluate(x);
 
-            auto errorUpperBound = mag(actual-predicted);
+            auto errorUpperBound = mag(actual - predicted);
 
             if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
                 return false;
 
             _errorBounds.emplace_back(errorUpperBound);
 
-            x += denominator;
+            x += degreeReciprocal;
         }
 
         return true;
-    }
-
-    static Bounds<T> invert(const Bounds<T> &x) {
-        return 1 / x;
-    }
-    static Bounds<T> invert(const T &x) {
-        return 1 / x;
     }
 
     std::vector<PositiveUpperBound<T>> _errorBounds{};

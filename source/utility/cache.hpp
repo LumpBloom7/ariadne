@@ -10,22 +10,19 @@ namespace Ariadne {
 template<typename ReturnT, typename... ArgT>
 class Cache {
   public:
-    ReturnT operator()(ArgT... args) { return get(args...); };
-    ReturnT get(ArgT... args) {
-        auto retIt = _backingStorage.find(std::make_tuple(args...));
+    const ReturnT& operator()(ArgT... args) { return get(args...); };
+    const ReturnT& get(ArgT... args) {
+        auto tpl = std::make_tuple(args...);
+        auto retIt = _backingStorage.find(tpl);
         if (retIt != _backingStorage.end()) {
             return retIt->second;
         }
 
-        auto computed = compute(args...);
-
-        _backingStorage.emplace(std::make_tuple(args...), computed);
-
-        return computed;
+        return _backingStorage[tpl] = compute(args...);
     }
 
   protected:
-    virtual ReturnT compute(ArgT... args) = 0;
+    virtual const ReturnT compute(ArgT... args) = 0;
 
   private:
     std::unordered_map<std::tuple<ArgT...>, ReturnT, Hash<std::tuple<ArgT...>>> _backingStorage = {};
@@ -41,10 +38,10 @@ class SimpleCache : public Cache<ReturnT, ArgT...> {
     SimpleCache(FT function) : _function{function} {}
 
   protected:
-    ReturnT compute(ArgT... args) { return _function(args...); }
+    const ReturnT compute(ArgT... args) { return _function(args...); }
 
   private:
-    std::function<ReturnT(ArgT...)> _function;
+    const std::function<ReturnT(ArgT...)> _function;
 };
 } // namespace Ariadne
 

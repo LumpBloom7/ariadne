@@ -2,22 +2,19 @@
 
 namespace Ariadne {
 
-Integer Factorials::get(Nat64 x) {
+const Integer& Factorials::get(Nat64 x) {
     if (x < _backingStorage.size())
         return _backingStorage[x];
 
     return factorial(x);
 }
 
-Integer Factorials::factorial(Nat64 x) {
-    auto res = _backingStorage.back();
-
+const Integer& Factorials::factorial(Nat64 x) {
     for (size_t i = _backingStorage.size(); i <= x; ++i) {
-        res *= i;
-        _backingStorage.emplace_back(res);
+        _backingStorage.emplace_back(_backingStorage.back() * i);
     }
 
-    return res;
+    return _backingStorage.back();
 }
 
 std::vector<Integer> Factorials::_backingStorage = {1, 1};

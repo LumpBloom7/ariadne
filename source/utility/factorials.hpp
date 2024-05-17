@@ -8,10 +8,10 @@
 namespace Ariadne {
 class Factorials {
   public:
-    static Integer get(Nat64 x);
+    static const Integer& get(Nat64 x);
 
   private:
-    static Integer factorial(Nat64 x);
+    static const Integer& factorial(Nat64 x);
 
     static std::vector<Integer> _backingStorage;
 };

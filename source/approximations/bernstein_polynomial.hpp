@@ -37,7 +37,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
     BernsteinPolynomial(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients} {}
     BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
-        : precision(precision), degree(degree), degreeReciprocal(rec(T(degree, precision))) {
+        : precision(precision), degree(degree), degreeReciprocal(rec(T(degree, precision))), zero(Bounds<T>(precision)) {
         generateCoefficients(function, degree, precision);
         findCriticalPoints(degree, precision, secantIters);
     }
@@ -46,23 +46,21 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto y1 = evaluate_impl(x.lower_raw());
         auto y2 = evaluate_impl(x.upper_raw());
 
-        auto res = Bounds<T>(
-            LowerBound<T>(min(y1.lower_raw(), y2.lower_raw())),
-            UpperBound<T>(max(y1.upper_raw(), y2.upper_raw())));
+        auto mini = min(y1.lower_raw(), y2.upper_raw());
+        auto maxi = max(y1.upper_raw(), y2.upper_raw());
 
         for (const CriticalPoint &criticalPoint: _criticalPoints) {
             if (decide(criticalPoint.xPosition > x.upper_raw()))
                 break;
 
-            if(criticalPoint.xPosition < x.lower_raw())
+            if (criticalPoint.xPosition < x.lower_raw())
                 continue;
 
-            res = Bounds<T>(
-                LowerBound<T>(min(res.lower_raw(), criticalPoint.value.lower_raw())),
-                UpperBound<T>(max(res.upper_raw(), criticalPoint.value.upper_raw())));
+            mini = min(mini, criticalPoint.value.lower_raw()),
+            maxi = max(maxi, criticalPoint.value.upper_raw());
         }
 
-        return res;
+        return Bounds<T>(mini, maxi);
     }
 
     Bounds<T> evaluateDerivative(const Bounds<T> &x) const {
@@ -70,8 +68,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto y2 = evaluate_deriv_impl(x.upper_raw());
 
         auto res = Bounds<T>(
-            LowerBound<T>(min(y1.lower_raw(), y2.lower_raw())),
-            UpperBound<T>(max(y1.upper(), y2.upper())));
+            min(y1.lower_raw(), y2.lower_raw()),
+            max(y1.upper(), y2.upper()));
+
         return res;
     }
 
@@ -96,7 +95,6 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         else if ((x == 0).repr() >= LogicalValue::LIKELY)
             return _coefficients[0];
 
-        auto zero = Bounds<T>(x.precision());
         auto sum = zero;
 
         auto OneMinX = 1 - x;
@@ -124,7 +122,6 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
         // Derivative of the bernstein is just the sum of basis derivatives (Sum rule)
         // b_(k,n)'(x) = (nCk) * x^(k-1) * (1-x)^(n-k)*  (k-nx)
-        auto zero = Bounds<T>(x.precision());
         auto sum = zero;
 
         auto OneMinX = 1 - x;
@@ -151,7 +148,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         _coefficients.clear();
         _coefficients.reserve(degree + 1);
 
-        Bounds<T> x = 0 * degreeReciprocal;
+        auto x = zero;
         for (size_t i = 0; i <= degree; ++i) {
             int v2 = (i * 2 >= degree) ? (degree - i) : i;
             auto res = function(x) * binomialCoefficients(degree, v2);
@@ -161,11 +158,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         }
 
         {
-            auto b = binomialCoefficients(degree, 1);
-
             _derivativeEndpoints = {
-                (function(degreeReciprocal) - function(0 * degreeReciprocal)) * b,
-                (function((degree - 1) * degreeReciprocal) - function(degree * degreeReciprocal)) * b,
+                (function(degreeReciprocal) - function(zero)) * degree,
+                (function((degree - 1) * degreeReciprocal) - function(degree * degreeReciprocal)) * degree,
             };
         }
     }
@@ -173,7 +168,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     void findCriticalPoints(DegreeType degree, PR precision, int secantIterations = 5) {
         _criticalPoints.clear();
 
-        Bounds<T> x = Bounds<T>(LowerBound<T>(0, precision), UpperBound(degreeReciprocal));
+        Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
 
         for (size_t i = 1; i <= degree; ++i, x += degreeReciprocal) {
             Bounds<T> criticalPoint = secantMethod(x, secantIterations);
@@ -192,7 +187,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     void findCriticalPoints(DegreeType degree, const PositiveUpperBound<T> &targetEpsilon) {
         _criticalPoints.clear();
 
-        Bounds<T> x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound(degreeReciprocal));
+        Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal);
 
         for (size_t i = 1; i <= degree; ++i) {
             Bounds<T> criticalPoint = secantMethod(x, targetEpsilon);
@@ -214,7 +209,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return pow(x.value(), v) * pow(1 - x.value(), n - v);
     }
 
-    Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
+    const Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
         T s[]{
             x.lower_raw(),
             x.upper_raw()};
@@ -229,10 +224,10 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto mini = min(s[0], s[1]);
         auto maxi = max(s[0], s[1]);
 
-        return Bounds<T>(LowerBound<T>(mini), UpperBound<T>(maxi));
+        return Bounds<T>(mini, maxi);
     }
 
-    Bounds<T> secantMethod(const Bounds<T> &x, int iterations = 1) const {
+    const Bounds<T> secantMethod(const Bounds<T> &x, int iterations = 1) const {
         T s[]{
             x.lower_raw(),
             x.upper_raw()};
@@ -246,7 +241,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto mini = min(s[0], s[1]);
         auto maxi = max(s[0], s[1]);
 
-        return Bounds<T>(LowerBound<T>(mini), UpperBound<T>(maxi));
+        return Bounds<T>(mini, maxi);
     }
 
     bool secantMethod_impl(T (&x)[2], Bounds<T> &leftDeriv) const {
@@ -269,6 +264,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
     std::vector<Bounds<T>> _coefficients{};
     std::vector<Bounds<T>> _derivativeEndpoints;
     Bounds<T> degreeReciprocal;
+    const Bounds<T> zero;
 
     struct CriticalPoint {
         CriticalPoint(T xPos, Bounds<T> val) : xPosition(xPos), value(val) {}

@@ -62,10 +62,10 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
-        auto& degree = this->degree;
+        auto &degree = this->degree;
         auto maximum = PositiveUpperBound<T>(x.precision());
 
-        auto xr = 0 * this->degreeReciprocal;
+        auto xr = this->zero;
 
         for (size_t i = 0; i <= degree; ++i) {
             xr += this->degreeReciprocal;
@@ -86,7 +86,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     bool earlyBoundsTest(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, const PositiveUpperBound<T> &targetEpsilon) {
         auto &degreeReciprocal = this->degreeReciprocal;
         for (int i = 1; i <= degree; ++i) {
-            auto interval = Bounds<T>(LowerBound<T>((i - 1) * degreeReciprocal), UpperBound<T>(i * degreeReciprocal));
+            auto interval = Bounds<T>(((i - 1) * degreeReciprocal).lower_raw(), (i * degreeReciprocal).upper_raw());
 
             auto range = function(interval);
             auto error = mag(range.upper_raw() - range.lower_raw());
@@ -99,13 +99,13 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
-        auto& degree = this->degree;
+        auto &degree = this->degree;
 
         _errorBounds.clear();
         _errorBounds.reserve(degree);
 
         auto &degreeReciprocal = this->degreeReciprocal;
-        auto x = Bounds<T>(LowerBound<T>(0, targetEpsilon.precision()), UpperBound<T>(degreeReciprocal));
+        auto x = Bounds<T>((this->zero).lower_raw(), degreeReciprocal.upper_raw());
 
         for (int i = 1; i <= degree; ++i) {
             auto actual = function(x);

@@ -11,44 +11,31 @@
 
 #include "approximations/bernstein_polynomial.hpp"
 namespace Ariadne {
+
 template<typename T>
-class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
-    typedef typename T::RoundingModeType RND;
-    typedef typename T::PrecisionType PR;
+class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
+    using PR = T::PrecisionType;
 
   public:
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIterations = 5)
-        : BernsteinPolynomial<T>(function, degree, precision, secantIterations) {
-        this->degreeReciprocal = rec(T(degree, precision));
-        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision)));
+    BoundedBernsteinPolynomial_impl(const IBernsteinPolynomialPtr<T> &polynomial, const std::function<Bounds<T>(Bounds<T>)> &function)
+        : polynomial(polynomial) {
+        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision())));
     }
 
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon)
-        : BernsteinPolynomial<T>({}) {
-        DegreeType degree = 1;
-        this->degreeReciprocal = rec(T(degree, precision));
+    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
+        return polynomial.evaluate(x);
+    }
 
-        while (!earlyBoundsTest(function, degree, targetEpsilon)) {
-            degree *= 2;
-            this->degreeReciprocal = rec(T(degree, precision));
-            std::cout << degree << std::endl;
-        }
+    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
+        return polynomial.evaluateDerivative(x);
+    }
 
-        std::clog << "EARLY PASS DONE" << std::endl;
+    virtual DegreeType degree() const override {
+        return polynomial.degree();
+    };
 
-        do {
-            std::cout << degree << std::endl;
-            if (degree == 0) {
-                std::clog << "Unable to increase degree past 2^16, bailing out. Error bounds will be based on the previous degree tested." << std::endl;
-                break;
-            }
-
-            this->generateCoefficients(function, degree, targetEpsilon.precision());
-            this->findCriticalPoints(degree, targetEpsilon);
-            degree *= 2;
-            this->degreeReciprocal = rec(T(degree, precision));
-
-        } while (/* !endpointTest(function, targetEpsilon) || */ !computeErrorBounds(function, targetEpsilon));
+    virtual PR precision() const override {
+        return polynomial.precision();
     }
 
     PositiveUpperBound<T> maximumError() const {
@@ -62,13 +49,14 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     }
 
     PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
-        auto &degree = this->degree;
+        auto degree = this->degree();
         auto maximum = PositiveUpperBound<T>(x.precision());
 
-        auto xr = this->zero;
+        auto xr = Bounds<T>(x.precision());
+        auto degreeReciprocal = rec(Bounds<T>(degree, x.precision));
 
         for (size_t i = 0; i <= degree; ++i) {
-            xr += this->degreeReciprocal;
+            xr += degreeReciprocal;
 
             if ((x.lower_raw() >= xr).repr() >= LogicalValue::LIKELY)
                 continue;
@@ -82,39 +70,27 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         return maximum;
     }
 
-  private:
-    bool earlyBoundsTest(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, const PositiveUpperBound<T> &targetEpsilon) {
-        auto &degreeReciprocal = this->degreeReciprocal;
-        for (int i = 1; i <= degree; ++i) {
-            auto interval = Bounds<T>(((i - 1) * degreeReciprocal).lower_raw(), (i * degreeReciprocal).upper_raw());
+    virtual std::shared_ptr<IBernsteinPolynomial<T>> asSharedPtr() const override {
+        return std::make_shared<BoundedBernsteinPolynomial_impl>(*this);
+    };
 
-            auto range = function(interval);
-            auto error = mag(range.upper_raw() - range.lower_raw());
-
-            if ((error > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
-                return false;
-        }
-
-        return true;
-    }
-
+  protected:
     bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
-        auto &degree = this->degree;
+        auto degree = this->degree();
 
         _errorBounds.clear();
         _errorBounds.reserve(degree);
 
-        auto &degreeReciprocal = this->degreeReciprocal;
-        auto x = Bounds<T>((this->zero).lower_raw(), degreeReciprocal.upper_raw());
+        auto zero = Bounds<T>(targetEpsilon.precision());
+        auto degreeReciprocal = rec(Bounds<T>(degree, zero.precision()));
+
+        auto x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
 
         for (int i = 1; i <= degree; ++i) {
             auto actual = function(x);
             auto predicted = this->evaluate(x);
 
             auto errorUpperBound = mag(actual - predicted);
-
-            if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
-                return false;
 
             _errorBounds.emplace_back(errorUpperBound);
 
@@ -124,7 +100,34 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
         return true;
     }
 
+  private:
     std::vector<PositiveUpperBound<T>> _errorBounds{};
+    IBernsteinPolynomialPtr<T> polynomial;
+};
+
+template<typename T>
+class BoundedBernsteinPolynomial : public IBernsteinPolynomialPtr<T> {
+  public:
+    using RND = T::RoundingModeType;
+    using PR = T::PrecisionType;
+
+    template<typename... TArgs>
+    BoundedBernsteinPolynomial(TArgs... args) {
+        (this->_ptr) = _ptr2 = std::make_shared<BoundedBernsteinPolynomial_impl<T>>(args...);
+    }
+
+    PositiveUpperBound<T> maximumError() const {
+        _ptr2->maximumError();
+    }
+
+    PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
+        _ptr2->maximumErrorAt(x);
+    }
+
+  protected:
+
+  private:
+    std::shared_ptr<BoundedBernsteinPolynomial_impl<T>> _ptr2{nullptr};
 };
 
 } // namespace Ariadne

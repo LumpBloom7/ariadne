@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 
+#include "approximations/bernstein_polynomial_shared.hpp"
 #include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/float_error.hpp"
@@ -13,36 +14,30 @@
 #include "numeric/integer.hpp"
 #include "numeric/real.hpp"
 #include "numeric/validated_real.hpp"
-#include "utility/cache.hpp"
-#include "utility/factorials.hpp"
 #include "utility/hash.hpp"
 #include "utility/hash_numeric.hpp"
 #include "utility/hash_tuple.hpp"
 #include "utility/standard.hpp"
 namespace Ariadne {
 
-class BernsteinPolynomialBase {
-  protected:
-    static SimpleCache<Integer, Nat64, Nat64> binomialCoefficients;
-};
-
 template<typename T>
-class BernsteinPolynomial : protected BernsteinPolynomialBase {
-    typedef typename T::RoundingModeType RND;
-    typedef typename T::PrecisionType PR;
+class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
+                                 virtual protected IBernsteinPolynomialBase {
+    using RND = T::RoundingModeType;
+    using PR = T::PrecisionType;
 
   public:
-    const PR precision;
-    const DegreeType degree;
+    const PR _precision;
+    const DegreeType _degree;
 
-    BernsteinPolynomial(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients} {}
-    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
-        : precision(precision), degree(degree), degreeReciprocal(rec(T(degree, precision))), zero(Bounds<T>(precision)) {
-        generateCoefficients(function, degree, precision);
-        findCriticalPoints(degree, precision, secantIters);
+    BernsteinPolynomial_impl(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients} {}
+    BernsteinPolynomial_impl(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
+        : _precision(precision), _degree(degree), degreeReciprocal(rec(T(degree, precision))), zero(Bounds<T>(precision)) {
+        generateCoefficients(function);
+        findCriticalPoints(secantIters);
     }
 
-    Bounds<T> evaluate(const Bounds<T> &x) const {
+    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
         auto y1 = evaluate_impl(x.lower_raw());
         auto y2 = evaluate_impl(x.upper_raw());
 
@@ -63,7 +58,7 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return Bounds<T>(mini, maxi);
     }
 
-    Bounds<T> evaluateDerivative(const Bounds<T> &x) const {
+    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
         auto y2 = evaluate_deriv_impl(x.upper_raw());
 
@@ -72,6 +67,14 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
             max(y1.upper(), y2.upper()));
 
         return res;
+    }
+
+    virtual DegreeType degree() const override {
+        return _degree;
+    };
+
+    virtual PR precision() const override {
+        return _precision;
     }
 
     Bounds<T> DeCasteljau(const Bounds<T> &x) const {
@@ -88,6 +91,10 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
     Bounds<T> operator()(const Bounds<T> &x) const { return evaluate(x); }
 
+    virtual std::shared_ptr<IBernsteinPolynomial<T>> asSharedPtr() const override {
+        return std::make_shared<BernsteinPolynomial_impl<T>>(*this);
+    }
+
   protected:
     Bounds<T> evaluate_impl(const T &x) const {
         if ((x == 1).repr() >= LogicalValue::LIKELY)
@@ -101,9 +108,9 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto oneMinXRec = rec(OneMinX);
 
         auto xPow = pow(x, 0);
-        auto xMinPow = pow(OneMinX, degree);
+        auto xMinPow = pow(OneMinX, _degree);
 
-        for (size_t i = 0; i <= degree; ++i) {
+        for (size_t i = 0; i <= _degree; ++i) {
             auto bp = xPow * xMinPow;
             sum = fma(bp, _coefficients[i], sum);
 
@@ -128,11 +135,11 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         auto oneMinXRec = rec(OneMinX);
 
         auto xPow = 1 / x;
-        auto xMinPow = pow(OneMinX, degree - 1);
+        auto xMinPow = pow(OneMinX, _degree - 1);
 
-        auto nx = (degree * x);
+        auto nx = (_degree * x);
 
-        for (size_t i = 0; i <= degree; ++i) {
+        for (size_t i = 0; i <= _degree; ++i) {
             auto kMinusNX = i - nx;
             auto bp = xPow * xMinPow * kMinusNX;
             sum = fma(bp, _coefficients[i], sum);
@@ -144,14 +151,14 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         return sum;
     }
 
-    void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision) {
+    void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)> &function) {
         _coefficients.clear();
-        _coefficients.reserve(degree + 1);
+        _coefficients.reserve(_degree + 1);
 
         auto x = zero;
-        for (size_t i = 0; i <= degree; ++i) {
-            int v2 = (i * 2 >= degree) ? (degree - i) : i;
-            auto res = function(x) * binomialCoefficients(degree, v2);
+        for (size_t i = 0; i <= _degree; ++i) {
+            int v2 = (i * 2 >= _degree) ? (_degree - i) : i;
+            auto res = function(x) * binomialCoefficients(_degree, v2);
 
             _coefficients.emplace_back(res);
             x += degreeReciprocal;
@@ -159,18 +166,18 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
         {
             _derivativeEndpoints = {
-                (function(degreeReciprocal) - function(zero)) * degree,
-                (function((degree - 1) * degreeReciprocal) - function(degree * degreeReciprocal)) * degree,
+                (function(degreeReciprocal) - function(zero)) * _degree,
+                (function((_degree - 1) * degreeReciprocal) - function(_degree * degreeReciprocal)) * _degree,
             };
         }
     }
 
-    void findCriticalPoints(DegreeType degree, PR precision, int secantIterations = 5) {
+    void findCriticalPoints(int secantIterations = 5) {
         _criticalPoints.clear();
 
         Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
 
-        for (size_t i = 1; i <= degree; ++i, x += degreeReciprocal) {
+        for (size_t i = 1; i <= _degree; ++i, x += degreeReciprocal) {
             Bounds<T> criticalPoint = secantMethod(x, secantIterations);
 
             T critX = criticalPoint.value_raw();
@@ -184,12 +191,12 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
         }
     }
 
-    void findCriticalPoints(DegreeType degree, const PositiveUpperBound<T> &targetEpsilon) {
+    void findCriticalPoints(const PositiveUpperBound<T> &targetEpsilon) {
         _criticalPoints.clear();
 
         Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal);
 
-        for (size_t i = 1; i <= degree; ++i) {
+        for (size_t i = 1; i <= _degree; ++i) {
             Bounds<T> criticalPoint = secantMethod(x, targetEpsilon);
 
             T critX = criticalPoint.value_raw();
@@ -275,6 +282,22 @@ class BernsteinPolynomial : protected BernsteinPolynomialBase {
 
     std::vector<CriticalPoint> _criticalPoints{};
 };
+
+template<typename T>
+class BernsteinPolynomial : public IBernsteinPolynomialPtr<T> {
+  public:
+    using RND = T::RoundingModeType;
+    using PR = T::PrecisionType;
+
+    template<typename... TArgs>
+    BernsteinPolynomial(TArgs... args) {
+        (this->_ptr) = _ptr2 = std::make_shared<BernsteinPolynomial_impl<T>>(args...);
+    }
+
+  private:
+    std::shared_ptr<BernsteinPolynomial_impl<T>> _ptr2{nullptr};
+};
+
 } // namespace Ariadne
 
 #endif // ARIADNE_BERNSTEIN_POLYNOMIAL_HPP

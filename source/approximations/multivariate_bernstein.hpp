@@ -16,7 +16,7 @@
 
 namespace Ariadne {
 template<typename T, size_t argumentsNumber>
-class MultivariateBernsteinPolynomial : BernsteinPolynomialBase {
+class MultivariateBernsteinPolynomial : IBernsteinPolynomialBase {
     typedef typename T::RoundingModeType RND;
     typedef typename T::PrecisionType PR;
 

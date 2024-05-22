@@ -1,7 +1,7 @@
 set(LIBRARY_NAME ariadne-approximations)
 
 add_library(${LIBRARY_NAME} OBJECT
-       bernstein_polynomial.cpp
+       bernstein_polynomial_shared.cpp
 )
 
 foreach(WARN ${LIBRARY_EXCLUSIVE_WARN})

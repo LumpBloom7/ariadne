@@ -21,6 +21,10 @@ class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
         : polynomial(polynomial) {
         computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision())));
     }
+    BoundedBernsteinPolynomial_impl(const IBernsteinPolynomialPtr<T> &polynomial, const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> epsilon)
+        : polynomial(polynomial) {
+        computeErrorBounds(function, epsilon);
+    }
 
     virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
         return polynomial.evaluate(x);
@@ -53,7 +57,7 @@ class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
         auto maximum = PositiveUpperBound<T>(x.precision());
 
         auto xr = Bounds<T>(x.precision());
-        auto degreeReciprocal = rec(Bounds<T>(degree, x.precision));
+        auto degreeReciprocal = rec(Bounds<T>(degree, x.precision()));
 
         for (size_t i = 0; i <= degree; ++i) {
             xr += degreeReciprocal;
@@ -75,7 +79,7 @@ class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
     };
 
   protected:
-    bool computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
+    void computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
         auto degree = this->degree();
 
         _errorBounds.clear();
@@ -94,10 +98,11 @@ class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
 
             _errorBounds.emplace_back(errorUpperBound);
 
+            if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
+                return;
+
             x += degreeReciprocal;
         }
-
-        return true;
     }
 
   private:
@@ -117,11 +122,11 @@ class BoundedBernsteinPolynomial : public IBernsteinPolynomialPtr<T> {
     }
 
     PositiveUpperBound<T> maximumError() const {
-        _ptr2->maximumError();
+        return _ptr2->maximumError();
     }
 
     PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
-        _ptr2->maximumErrorAt(x);
+        return _ptr2->maximumErrorAt(x);
     }
 
   protected:

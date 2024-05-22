@@ -37,7 +37,7 @@ class IBernsteinPolynomialPtr : virtual public IBernsteinPolynomial<T> {
 
   public:
     IBernsteinPolynomialPtr() = default;
-    IBernsteinPolynomialPtr(IBernsteinPolynomial<T> p) : _ptr(p.asSharedPtr()) {}
+    IBernsteinPolynomialPtr(const IBernsteinPolynomial<T>& p) : _ptr(p.asSharedPtr()) {}
 
     virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
         return _ptr->evaluate(x);
@@ -62,6 +62,22 @@ class IBernsteinPolynomialPtr : virtual public IBernsteinPolynomial<T> {
   protected:
     std::shared_ptr<IBernsteinPolynomial<T>> _ptr{nullptr};
 };
+template<typename T>
+class BernsteinPolynmomialNegation : virtual public IBernsteinPolynomialPtr<T> {
+    using PR = T::PrecisionType;
+
+  public:
+    BernsteinPolynmomialNegation(const IBernsteinPolynomial<T>& p) : IBernsteinPolynomialPtr<T>(p) {}
+
+    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
+        return -(this->_ptr->evaluate(x));
+    }
+
+    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
+        return -(this->_ptr->evaluateDerivative(x));
+    }
+};
+
 } // namespace Ariadne
 
 #endif

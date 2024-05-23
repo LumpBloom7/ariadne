@@ -40,10 +40,11 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
     }
 
     virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
-        auto y = evaluate_impl(x);
-        
-        auto mini = y.lower_raw();
-        auto maxi = y.upper_raw();
+        auto y1 = evaluate_impl(x.lower_raw());
+        auto y2 = evaluate_impl(x.upper_raw());
+
+        auto mini = min(y1.lower_raw(), y2.upper_raw());
+        auto maxi = max(y1.upper_raw(), y2.upper_raw());
 
         for (const CriticalPoint &criticalPoint: _criticalPoints) {
             if (decide(criticalPoint.xPosition > x.upper_raw()))
@@ -141,7 +142,7 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
     }
 
   protected:
-    Bounds<T> evaluate_impl(const Bounds<T> &x) const {
+    Bounds<T> evaluate_impl(const T &x) const {
         if ((x == 1).repr() >= LogicalValue::LIKELY)
             return *(_coefficients.end() - 1);
         else if ((x == 0).repr() >= LogicalValue::LIKELY)

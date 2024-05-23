@@ -60,7 +60,6 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
         return Bounds<T>(mini, maxi);
     }
 
-
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
         auto y2 = evaluate_deriv_impl(x.upper_raw());
@@ -220,6 +219,9 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
 
     void findCriticalPoints(int secantIterations = 5) {
         _criticalPoints.clear();
+
+        if (secantIterations == 0)
+            return;
 
         Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
 

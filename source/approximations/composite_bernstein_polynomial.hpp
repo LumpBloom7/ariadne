@@ -6,21 +6,18 @@ namespace Ariadne {
 template<typename T>
 class CompositeBernsteinPolynomial : public IBernsteinPolynomial<T> {
     using BType = IBernsteinPolynomial<T>;
-    using BTypePtr = IBernsteinPolynomialPtr<T>;
-    ;
-
     using PR = T::PrecisionType;
 
   public:
-    CompositeBernsteinPolynomial(std::initializer_list<BTypePtr> list) {
-        for (BTypePtr p: list)
+    CompositeBernsteinPolynomial(std::initializer_list<BType> list) {
+        for (BType& p: list)
             polynomials.emplace_back(p);
     };
 
     virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
         Bounds<T> sum = Bounds<T>(x.precision());
 
-        for (BTypePtr p: polynomials)
+        for (BType p: polynomials)
             sum += p.evaluate(x);
 
         return sum;
@@ -29,7 +26,7 @@ class CompositeBernsteinPolynomial : public IBernsteinPolynomial<T> {
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
         Bounds<T> sum = Bounds<T>(x.precision());
 
-        for (BTypePtr p: polynomials)
+        for (BType& p: polynomials)
             sum += p.evaluateDerivative(x);
 
         return sum;
@@ -38,7 +35,7 @@ class CompositeBernsteinPolynomial : public IBernsteinPolynomial<T> {
     virtual DegreeType degree() const override {
         DegreeType maxDegree = 0;
 
-        for (auto p: polynomials) {
+        for (BType& p: polynomials) {
             if (p.degree() > maxDegree)
                 maxDegree = p.degree();
         }
@@ -52,7 +49,7 @@ class CompositeBernsteinPolynomial : public IBernsteinPolynomial<T> {
 
         PR minPrecision = polynomials[0].precision();
 
-        for (auto p: polynomials)
+        for (BType& p: polynomials)
             minPrecision = min(p.precision(), minPrecision);
 
         return minPrecision;
@@ -71,12 +68,8 @@ class CompositeBernsteinPolynomial : public IBernsteinPolynomial<T> {
         return *this;
     }
 
-    virtual std::shared_ptr<IBernsteinPolynomial<T>> asSharedPtr() const override {
-        return std::make_shared<CompositeBernsteinPolynomial<T>>(*this);
-    }
-
   private:
-    std::vector<BTypePtr> polynomials = {};
+    std::vector<BType> polynomials = {};
 };
 
 template<typename T>

@@ -11,35 +11,22 @@
 
 #include "approximations/bernstein_polynomial.hpp"
 namespace Ariadne {
-
 template<typename T>
-class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
+class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
     using PR = T::PrecisionType;
 
   public:
-    BoundedBernsteinPolynomial_impl(const IBernsteinPolynomialPtr<T> &polynomial, const std::function<Bounds<T>(Bounds<T>)> &function)
-        : polynomial(polynomial) {
-        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(precision())));
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const BernsteinPolynomial<T> &original) : BernsteinPolynomial<T>(original) {
+        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(this->precision())));
     }
-    BoundedBernsteinPolynomial_impl(const IBernsteinPolynomialPtr<T> &polynomial, const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> epsilon)
-        : polynomial(polynomial) {
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const BernsteinPolynomial<T> &original, PositiveUpperBound<T> epsilon) : BernsteinPolynomial<T>(original) {
         computeErrorBounds(function, epsilon);
     }
 
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
-        return polynomial.evaluate(x);
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5) : BoundedBernsteinPolynomial(function, PositiveUpperBound<T>(T::inf(precision)), degree, precision, secantIters) {
     }
-
-    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
-        return polynomial.evaluateDerivative(x);
-    }
-
-    virtual DegreeType degree() const override {
-        return polynomial.degree();
-    };
-
-    virtual PR precision() const override {
-        return polynomial.precision();
+    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> epsilon, DegreeType degree, PR precision, int secantIters = 5) : BernsteinPolynomial<T>(function, degree, precision, secantIters) {
+        computeErrorBounds(function, epsilon);
     }
 
     PositiveUpperBound<T> maximumError() const {
@@ -74,11 +61,6 @@ class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
         return maximum;
     }
 
-    virtual std::shared_ptr<IBernsteinPolynomial<T>> asSharedPtr() const override {
-        return std::make_shared<BoundedBernsteinPolynomial_impl>(*this);
-    };
-
-  protected:
     void computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
         auto degree = this->degree();
 
@@ -104,35 +86,8 @@ class BoundedBernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T> {
             x += degreeReciprocal;
         }
     }
-
   private:
     std::vector<PositiveUpperBound<T>> _errorBounds{};
-    IBernsteinPolynomialPtr<T> polynomial;
-};
-
-template<typename T>
-class BoundedBernsteinPolynomial : public IBernsteinPolynomialPtr<T> {
-  public:
-    using RND = T::RoundingModeType;
-    using PR = T::PrecisionType;
-
-    template<typename... TArgs>
-    BoundedBernsteinPolynomial(TArgs... args) {
-        (this->_ptr) = _ptr2 = std::make_shared<BoundedBernsteinPolynomial_impl<T>>(args...);
-    }
-
-    PositiveUpperBound<T> maximumError() const {
-        return _ptr2->maximumError();
-    }
-
-    PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
-        return _ptr2->maximumErrorAt(x);
-    }
-
-  protected:
-
-  private:
-    std::shared_ptr<BoundedBernsteinPolynomial_impl<T>> _ptr2{nullptr};
 };
 
 } // namespace Ariadne

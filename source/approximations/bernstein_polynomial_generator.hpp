@@ -9,17 +9,15 @@
 namespace Ariadne {
 
 template<typename T>
-BoundedBernsteinPolynomial<T> createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon) {
+auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon) {
     DegreeType degree = 1;
-    auto p = BernsteinPolynomial<T>(function, degree, epsilon.precision());
-    auto b = BoundedBernsteinPolynomial<T>(p, function, epsilon);
+    auto b = BoundedBernsteinPolynomial(function, epsilon, degree, epsilon.precision());
 
     while (!decide(b.maximumError() < epsilon)) {
         std::cout << degree << " " << b.maximumError() << std::endl;
 
         degree *= 2;
-        p = BernsteinPolynomial<T>(function, degree, epsilon.precision());
-        b = BoundedBernsteinPolynomial<T>(p, function, epsilon);
+        b = BoundedBernsteinPolynomial(function, epsilon, degree, epsilon.precision());
     }
 
     return b;
@@ -31,19 +29,22 @@ BoundedBernsteinPolynomial<T> createIterativeBernsteinPolynomialWith(const std::
 
     while (true) {
         std::cout << "Degree: " << degree << std::endl;
-        CompositeBernsteinPolynomial<T> composite = {};
-        for (int i = 0; i < maxIterations; ++i) {
+        auto composite = BoundedBernsteinPolynomial(function, epsilon, degree, epsilon.precision());
+        for (int i = 1; i < maxIterations; ++i) {
+            std::cout << "\tMaximum error: " << composite.maximumError() << std::endl;
+            std::cout << "\tIteration: " << i << std::endl;
+            if (decide(composite.maximumError() < epsilon))
+                return composite;
+
             std::function<Bounds<T>(Bounds<T>)> f = [&](Bounds<T> x) {
                 return function(x) - composite(x);
             };
-            std::cout << "\tIteration: " << i << std::endl;
+
             auto p = BernsteinPolynomial<T>(f, degree, epsilon.precision());
             composite += p;
 
-            auto b = BoundedBernsteinPolynomial<T>(composite, function, epsilon);
-            std::cout << "\tMaximum error: " << b.maximumError() << std::endl;
-            if (decide(b.maximumError() < epsilon))
-                return b;
+            // Recompute composite
+            composite.computeErrorBounds(function, epsilon);
         }
 
         degree *= 2;

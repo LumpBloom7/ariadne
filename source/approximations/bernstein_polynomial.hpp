@@ -21,19 +21,21 @@
 namespace Ariadne {
 
 template<typename T>
-class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
-                                 virtual protected IBernsteinPolynomialBase {
+class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
+                            virtual protected IBernsteinPolynomialBase {
     using RND = T::RoundingModeType;
     using PR = T::PrecisionType;
 
   public:
-    const PR _precision;
-    const DegreeType _degree;
+    PR _precision;
+    DegreeType _degree;
 
-    BernsteinPolynomial_impl(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients} {}
-    BernsteinPolynomial_impl(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
+    BernsteinPolynomial(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients},
+                                                               _precision(coefficients[0].precision()), _degree(coefficients.size()), degreeReciprocal(rec(T(_degree, _precision))), zero(Bounds<T>(_precision)) {}
+    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
         : _precision(precision), _degree(degree), degreeReciprocal(rec(T(degree, precision))), zero(Bounds<T>(precision)) {
         generateCoefficients(function);
+        computeDerivEndpoints();
         findCriticalPoints(secantIters);
     }
 
@@ -57,6 +59,7 @@ class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
 
         return Bounds<T>(mini, maxi);
     }
+
 
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
@@ -91,8 +94,52 @@ class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
 
     Bounds<T> operator()(const Bounds<T> &x) const { return evaluate(x); }
 
-    virtual std::shared_ptr<IBernsteinPolynomial<T>> asSharedPtr() const override {
-        return std::make_shared<BernsteinPolynomial_impl<T>>(*this);
+    BernsteinPolynomial<T> operator+(const BernsteinPolynomial<T> &other) const {
+        if (other._degree != _degree)
+            throw std::runtime_error("Degree of both polynomials do not match");
+
+        auto coefficients = _coefficients;
+
+        for (int i = 0; i < _degree; ++i)
+            coefficients[i] += other._coefficients[i];
+
+        return BernsteinPolynomial<T>(coefficients);
+    }
+
+    BernsteinPolynomial<T> operator-(const BernsteinPolynomial<T> &other) const {
+        if (other._degree != _degree)
+            throw std::runtime_error("Degree of both polynomials do not match");
+
+        auto coefficients = _coefficients;
+
+        for (int i = 0; i < _degree; ++i)
+            coefficients[i] -= other._coefficients[i];
+
+        return BernsteinPolynomial<T>(coefficients);
+    }
+
+    BernsteinPolynomial<T> &operator+=(const BernsteinPolynomial<T> &other) {
+        if (other._degree != _degree)
+            throw std::runtime_error("Degree of both polynomials do not match");
+
+        for (int i = 0; i < _degree; ++i)
+            _coefficients[i] += other._coefficients[i];
+
+        computeDerivEndpoints();
+        findCriticalPoints();
+        return *this;
+    }
+
+    BernsteinPolynomial<T> &operator-=(const BernsteinPolynomial<T> &other) {
+        if (other._degree != _degree)
+            throw std::runtime_error("Degree of both polynomials do not match");
+
+        for (int i = 0; i < _degree; ++i)
+            _coefficients[i] -= other._coefficients[i];
+
+        computeDerivEndpoints();
+        findCriticalPoints();
+        return *this;
     }
 
   protected:
@@ -163,13 +210,12 @@ class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
             _coefficients.emplace_back(res);
             x += degreeReciprocal;
         }
+    }
 
-        {
-            _derivativeEndpoints = {
-                (function(degreeReciprocal) - function(zero)) * _degree,
-                (function((_degree - 1) * degreeReciprocal) - function(_degree * degreeReciprocal)) * _degree,
-            };
-        }
+    void computeDerivEndpoints() {
+        _derivativeEndpoints = {
+            (_coefficients[1] - _coefficients[0]) * _degree,
+            (_coefficients[_degree - 1] - _coefficients[_degree]) * _degree};
     }
 
     void findCriticalPoints(int secantIterations = 5) {
@@ -271,7 +317,7 @@ class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
     std::vector<Bounds<T>> _coefficients{};
     std::vector<Bounds<T>> _derivativeEndpoints;
     Bounds<T> degreeReciprocal;
-    const Bounds<T> zero;
+    Bounds<T> zero;
 
     struct CriticalPoint {
         CriticalPoint(T xPos, Bounds<T> val) : xPosition(xPos), value(val) {}
@@ -281,21 +327,6 @@ class BernsteinPolynomial_impl : virtual public IBernsteinPolynomial<T>,
     };
 
     std::vector<CriticalPoint> _criticalPoints{};
-};
-
-template<typename T>
-class BernsteinPolynomial : public IBernsteinPolynomialPtr<T> {
-  public:
-    using RND = T::RoundingModeType;
-    using PR = T::PrecisionType;
-
-    template<typename... TArgs>
-    BernsteinPolynomial(TArgs... args) {
-        (this->_ptr) = _ptr2 = std::make_shared<BernsteinPolynomial_impl<T>>(args...);
-    }
-
-  private:
-    std::shared_ptr<BernsteinPolynomial_impl<T>> _ptr2{nullptr};
 };
 
 } // namespace Ariadne

@@ -224,8 +224,15 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
 
         Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
 
+        T lastCritX = x.lower_raw();
+
         for (size_t i = 1; i <= _degree; ++i, x += degreeReciprocal) {
+            if (decide(x.upper_raw() < lastCritX)) {
+                continue;
+            }
+
             Bounds<T> criticalPoint = secantMethod(x, secantIterations);
+            lastCritX = criticalPoint.lower_raw();
 
             T critX = criticalPoint.value_raw();
 
@@ -243,7 +250,12 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
 
         Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal);
 
+        T lastCritX = x.value_raw();
+
         for (size_t i = 1; i <= _degree; ++i) {
+            if (decide(x.upper_raw() < lastCritX))
+                continue;
+
             Bounds<T> criticalPoint = secantMethod(x, targetEpsilon);
 
             T critX = criticalPoint.value_raw();
@@ -288,9 +300,10 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
 
         auto leftval = this->evaluate_deriv_impl(s[0]);
 
-        for (int i = 0; i < iterations; ++i)
+        for (int i = 0; i < iterations; ++i) {
             if (!secantMethod_impl(s, leftval))
                 break;
+        }
 
         auto mini = min(s[0], s[1]);
         auto maxi = max(s[0], s[1]);
@@ -299,8 +312,8 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
     }
 
     bool secantMethod_impl(T (&x)[2], Bounds<T> &leftDeriv) const {
-        auto left = x[0];
-        auto right = x[1];
+        auto &left = x[0];
+        auto &right = x[1];
 
         auto rightDeriv = this->evaluate_deriv_impl(right);
 

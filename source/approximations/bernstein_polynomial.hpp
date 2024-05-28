@@ -302,6 +302,9 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
         auto leftval = this->evaluate_deriv_impl(s[0]);
 
         for (int i = 0; i < iterations; ++i) {
+            if (decide(max(s[0], s[1]) <= x.lower_raw()))
+                break;
+                
             if (!secantMethod_impl(s, leftval))
                 break;
         }

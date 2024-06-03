@@ -12,21 +12,48 @@
 #include "approximations/bernstein_polynomial.hpp"
 namespace Ariadne {
 template<typename T>
-class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
+class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
     using PR = T::PrecisionType;
 
   public:
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const BernsteinPolynomial<T> &original) : BernsteinPolynomial<T>(original) {
-        computeErrorBounds(function, PositiveUpperBound<T>(T::inf(this->precision())));
+    template<typename Y, typename... TArgs>
+    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, TArgs... args)
+        : originalPoly(std::make_shared<Y>(args...)) {
+        computeErrorBounds(function);
     }
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, const BernsteinPolynomial<T> &original, PositiveUpperBound<T> epsilon) : BernsteinPolynomial<T>(original) {
+    template<typename Y, typename... TArgs>
+    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> epsilon, TArgs... args)
+        : originalPoly(std::make_shared<Y>(args...)) {
         computeErrorBounds(function, epsilon);
     }
 
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5) : BoundedBernsteinPolynomial(function, PositiveUpperBound<T>(T::inf(precision)), degree, precision, secantIters) {
+    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr)
+        : originalPoly(approximationPtr) {
+        computeErrorBounds(function);
     }
-    BoundedBernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> epsilon, DegreeType degree, PR precision, int secantIters = 5) : BernsteinPolynomial<T>(function, degree, precision, secantIters) {
+
+    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr, PositiveUpperBound<T> epsilon)
+        : originalPoly(approximationPtr) {
         computeErrorBounds(function, epsilon);
+    }
+
+    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
+        return originalPoly->evaluate(x);
+    }
+    virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const override {
+        return originalPoly->evaluateRaw(x);
+    }
+
+    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
+        return originalPoly->evaluateDerivative(x);
+    }
+
+    virtual DegreeType degree() const override {
+        return originalPoly->degree();
+    }
+
+    virtual PR precision() const override {
+        return originalPoly->precision();
     }
 
     PositiveUpperBound<T> maximumError() const {
@@ -34,6 +61,10 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
         for (int i = 1; i < _errorBounds.size(); ++i) {
             maximum = max(maximum, _errorBounds[i]);
+
+            if (is_inf(_errorBounds[i].raw())) {
+                std::cout << i << std::endl;
+            }
         }
 
         return maximum;
@@ -74,7 +105,7 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
 
         for (int i = 1; i <= degree; ++i) {
             auto actual = function(x);
-            auto predicted = this->evaluate(x);
+            auto predicted = this->evaluateRaw(x);
 
             auto errorUpperBound = mag(actual - predicted);
 
@@ -86,8 +117,33 @@ class BoundedBernsteinPolynomial : public BernsteinPolynomial<T> {
             x += degreeReciprocal;
         }
     }
+
+    void computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function) {
+        auto degree = this->degree();
+
+        _errorBounds.clear();
+        _errorBounds.reserve(degree);
+
+        auto zero = Bounds<T>(this->precision());
+        auto degreeReciprocal = rec(Bounds<T>(degree, zero.precision()));
+
+        auto x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
+
+        for (int i = 1; i <= degree; ++i) {
+            auto actual = function(x);
+            auto predicted = this->evaluateRaw(x);
+
+            auto errorUpperBound = mag(actual - predicted);
+
+            _errorBounds.emplace_back(errorUpperBound);
+
+            x += degreeReciprocal;
+        }
+    }
+
   private:
     std::vector<PositiveUpperBound<T>> _errorBounds{};
+    std::shared_ptr<IPolynomialApproximation<T>> originalPoly;
 };
 
 } // namespace Ariadne

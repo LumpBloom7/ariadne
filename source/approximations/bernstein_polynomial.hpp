@@ -21,7 +21,7 @@
 namespace Ariadne {
 
 template<typename T>
-class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
+class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
                             virtual protected IBernsteinPolynomialBase {
     using RND = T::RoundingModeType;
     using PR = T::PrecisionType;
@@ -59,6 +59,11 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
 
         return Bounds<T>(mini, maxi);
     }
+
+    virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const override {
+        return evaluate_impl(x);
+    }
+
 
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
@@ -142,7 +147,7 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
     }
 
   protected:
-    Bounds<T> evaluate_impl(const T &x) const {
+    Bounds<T> evaluate_impl(const Bounds<T> &x) const {
         if ((x == 1).repr() >= LogicalValue::LIKELY)
             return *(_coefficients.end() - 1);
         else if ((x == 0).repr() >= LogicalValue::LIKELY)
@@ -157,7 +162,7 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
         auto xMinPow = pow(OneMinX, _degree);
 
         for (size_t i = 0; i <= _degree; ++i) {
-            auto bp = xPow * xMinPow;
+            auto bp = bernsteinBasisPolynomialFor(i, _degree, x);
             sum = fma(bp, _coefficients[i], sum);
 
             xPow *= x;
@@ -273,7 +278,7 @@ class BernsteinPolynomial : virtual public IBernsteinPolynomial<T>,
     }
 
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T> &x) {
-        return pow(x.value(), v) * pow(1 - x.value(), n - v);
+        return pow(x, v) * pow(1 - x, n - v);
     }
 
     const Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {

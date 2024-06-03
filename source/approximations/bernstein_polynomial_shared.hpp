@@ -11,14 +11,17 @@ class IBernsteinPolynomialBase {
 };
 
 template<typename T>
-class IBernsteinPolynomial {
+class IPolynomialApproximation {
   protected:
     using RND = T::RoundingModeType;
     using PR = T::PrecisionType;
 
   public:
-    ~IBernsteinPolynomial() {}
+    ~IPolynomialApproximation() {}
     virtual Bounds<T> evaluate(const Bounds<T> &x) const = 0;
+    virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const {
+        return evaluate(x);
+    }
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const = 0;
 
     virtual DegreeType degree() const = 0;

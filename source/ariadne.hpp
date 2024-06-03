@@ -45,8 +45,9 @@ namespace Ariadne {
 
 #include "approximations/bernstein_polynomial.hpp"
 #include "approximations/bounded_bernstein_polynomial.hpp"
-#include "approximations/composite_bernstein_polynomial.hpp"
 #include "approximations/bernstein_polynomial_generator.hpp"
+#include "approximations/NewtonPolynomial.hpp"
+#include "approximations/LagrangePolynomial.hpp"
 #include "approximations/chebyshev_polynomial.hpp"
 #include "approximations/multivariate_bernstein.hpp"
 

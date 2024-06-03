@@ -2,49 +2,54 @@
 #define ARIADNE_BERNSTEIN_POLYNOMIAL_GENERATOR_HPP
 
 #include <exception>
+#include <memory>
 
 #include "approximations/bounded_bernstein_polynomial.hpp"
-#include "approximations/composite_bernstein_polynomial.hpp"
 
 namespace Ariadne {
 
 template<typename T>
 auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon) {
     DegreeType degree = 1;
-    auto b = BoundedBernsteinPolynomial(function, epsilon, degree, epsilon.precision());
 
-    while (!decide(b.maximumError() < epsilon)) {
-        std::cout << degree << " " << b.maximumError() << std::endl;
+    std::shared_ptr<IPolynomialApproximation<T>> b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
+    auto bounded = BoundedPolynomialApproximation(function, b, epsilon);
+
+    while (!decide(bounded.maximumError() < epsilon)) {
+        std::cout << degree << " " << bounded.maximumError() << std::endl;
 
         degree *= 2;
-        b = BoundedBernsteinPolynomial(function, epsilon, degree, epsilon.precision());
+        b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
+        bounded = BoundedPolynomialApproximation(function, b, epsilon);
     }
 
-    return b;
+    return bounded;
 }
 
 template<typename T>
-BoundedBernsteinPolynomial<T> createIterativeBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon, int maxIterations = 10) {
+auto createIterativeBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon, int maxIterations = 10) {
     DegreeType degree = 1;
 
     while (true) {
         std::cout << "Degree: " << degree << std::endl;
-        auto composite = BoundedBernsteinPolynomial(function, epsilon, degree, epsilon.precision());
+        std::shared_ptr<IPolynomialApproximation<T>> composite = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
+        auto boundedComposite = BoundedPolynomialApproximation(function, composite);
+
         for (int i = 1; i < maxIterations; ++i) {
-            std::cout << "\tMaximum error: " << composite.maximumError() << std::endl;
+            std::cout << "\tMaximum error: " << boundedComposite.maximumError() << std::endl;
             std::cout << "\tIteration: " << i << std::endl;
-            if (decide(composite.maximumError() < epsilon))
-                return composite;
+            if (decide(boundedComposite.maximumError() < epsilon))
+                return boundedComposite;
 
             std::function<Bounds<T>(Bounds<T>)> f = [&](Bounds<T> x) {
-                return function(x) - composite(x);
+                return function(x) - boundedComposite(x);
             };
 
             auto p = BernsteinPolynomial<T>(f, degree, epsilon.precision());
-            composite += p;
+            *(dynamic_cast<BernsteinPolynomial<T> *>(composite.get())) += p;
 
             // Recompute composite
-            composite.computeErrorBounds(function, epsilon);
+            boundedComposite.computeErrorBounds(function, epsilon);
         }
 
         degree *= 2;

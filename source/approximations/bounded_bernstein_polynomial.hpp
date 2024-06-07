@@ -15,36 +15,38 @@ template<typename T>
 class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
     using PR = T::PrecisionType;
 
+    using TBounds = Bounds<T>;
+
   public:
     template<typename Y, typename... TArgs>
-    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, TArgs... args)
+    BoundedPolynomialApproximation(const std::function<TBounds(TBounds)> &function, TArgs... args)
         : originalPoly(std::make_shared<Y>(args...)) {
         computeErrorBounds(function);
     }
     template<typename Y, typename... TArgs>
-    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, PositiveUpperBound<T> epsilon, TArgs... args)
+    BoundedPolynomialApproximation(const std::function<TBounds(TBounds)> &function, PositiveUpperBound<T> epsilon, TArgs... args)
         : originalPoly(std::make_shared<Y>(args...)) {
         computeErrorBounds(function, epsilon);
     }
 
-    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr)
+    BoundedPolynomialApproximation(const std::function<TBounds(TBounds)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr, int subintervals = 1)
         : originalPoly(approximationPtr) {
-        computeErrorBounds(function);
+        computeErrorBounds(function, subintervals);
     }
 
-    BoundedPolynomialApproximation(const std::function<Bounds<T>(Bounds<T>)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr, PositiveUpperBound<T> epsilon)
+    BoundedPolynomialApproximation(const std::function<TBounds(TBounds)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr, PositiveUpperBound<T> epsilon, int depth = 1, int subintervals = 1)
         : originalPoly(approximationPtr) {
-        computeErrorBounds(function, epsilon);
+        computeErrorBounds(function, epsilon, depth, subintervals);
     }
 
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
-        return originalPoly->evaluate(x);
+    virtual TBounds evaluate(const TBounds &x, int subInterval = 1) const override {
+        return originalPoly->evaluate(x, subInterval);
     }
-    virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const override {
+    virtual TBounds evaluateRaw(const TBounds &x) const override {
         return originalPoly->evaluateRaw(x);
     }
 
-    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
+    virtual TBounds evaluateDerivative(const TBounds &x) const override {
         return originalPoly->evaluateDerivative(x);
     }
 
@@ -70,12 +72,12 @@ class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
         return maximum;
     }
 
-    PositiveUpperBound<T> maximumErrorAt(const Bounds<T> &x) const {
+    PositiveUpperBound<T> maximumErrorAt(const TBounds &x) const {
         auto degree = this->degree();
         auto maximum = PositiveUpperBound<T>(x.precision());
 
-        auto xr = Bounds<T>(x.precision());
-        auto degreeReciprocal = rec(Bounds<T>(degree, x.precision()));
+        auto xr = TBounds(x.precision());
+        auto degreeReciprocal = rec(TBounds(degree, x.precision()));
 
         for (size_t i = 0; i <= degree; ++i) {
             xr += degreeReciprocal;
@@ -92,46 +94,80 @@ class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
         return maximum;
     }
 
-    void computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &targetEpsilon) {
+    void computeErrorBounds(const std::function<TBounds(TBounds)> &function, const PositiveUpperBound<T> &targetEpsilon, int depth = 1, int subintervals = 1) {
         auto degree = this->degree();
 
         _errorBounds.clear();
         _errorBounds.reserve(degree);
 
-        auto zero = Bounds<T>(targetEpsilon.precision());
-        auto degreeReciprocal = rec(Bounds<T>(degree, zero.precision()));
+        auto zero = TBounds(this->precision());
+        auto degreeReciprocal = rec(TBounds(degree, zero.precision()));
 
-        auto x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
+        auto x = TBounds(zero.lower_raw(), degreeReciprocal.upper_raw());
 
         for (int i = 1; i <= degree; ++i) {
-            auto actual = function(x);
-            auto predicted = this->evaluateRaw(x);
+            auto error = computeErrorBounds(function, x, targetEpsilon, depth - 1, subintervals);
+            _errorBounds.emplace_back(error);
 
-            auto errorUpperBound = mag(actual - predicted);
-
-            _errorBounds.emplace_back(errorUpperBound);
-
-            if ((errorUpperBound > targetEpsilon).repr() >= LogicalValue::INDETERMINATE)
+            if (decide(error > targetEpsilon))
                 return;
 
             x += degreeReciprocal;
         }
     }
 
-    void computeErrorBounds(const std::function<Bounds<T>(Bounds<T>)> &function) {
+    PositiveUpperBound<T> computeErrorBounds(const std::function<TBounds(TBounds)> &function, const TBounds &interval, const PositiveUpperBound<T> &targetEpsilon, int depth = 1, int subintervals = 1) {
+        if (depth == 0) { // Base case
+            auto actual = function(interval);
+            auto predicted = this->evaluate(interval, subintervals);
+
+            auto error = mag(actual - predicted);
+
+            return error;
+        }
+
+        auto step = (interval.upper_raw() - interval.lower_raw()) / subintervals;
+        auto x = TBounds(interval.lower_raw(), UpperBound<T>(interval.lower_raw() + step));
+        PositiveUpperBound<T> maxError = PositiveUpperBound<T>(this->precision());
+
+        for (int i = 0; i < subintervals; ++i) {
+            auto actual = function(x);
+            auto error = mag(actual.upper_raw() - actual.lower_raw());
+
+            if (decide(error <= targetEpsilon)) {
+                auto predicted = this->evaluate(x);
+                error = mag(actual - predicted);
+            }
+
+            if (decide(error > targetEpsilon)) {
+                error = computeErrorBounds(function, x, targetEpsilon, depth - 1, subintervals);
+            }
+
+            maxError = max(error, maxError);
+
+            if (decide(error > targetEpsilon)) {
+                break;
+            }
+            x += step;
+        }
+
+        return maxError;
+    }
+
+    void computeErrorBounds(const std::function<TBounds(TBounds)> &function, int subintervals = 1) {
         auto degree = this->degree();
 
         _errorBounds.clear();
         _errorBounds.reserve(degree);
 
-        auto zero = Bounds<T>(this->precision());
-        auto degreeReciprocal = rec(Bounds<T>(degree, zero.precision()));
+        auto zero = TBounds(this->precision());
+        auto degreeReciprocal = rec(TBounds(degree, zero.precision()));
 
-        auto x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
+        auto x = TBounds(zero.lower_raw(), degreeReciprocal.upper_raw());
 
         for (int i = 1; i <= degree; ++i) {
             auto actual = function(x);
-            auto predicted = this->evaluateRaw(x);
+            auto predicted = this->evaluate(x, subintervals);
 
             auto errorUpperBound = mag(actual - predicted);
 

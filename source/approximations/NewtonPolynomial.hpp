@@ -31,7 +31,7 @@ class NewtonPolynomial : virtual public IPolynomialApproximation<T> {
         generateCoefficients(function);
     }
 
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
+    virtual Bounds<T> evaluate(const Bounds<T> &x, int subInterval = 1) const override {
         Bounds<T> sum = zero;
 
         auto mult = zero + 1;

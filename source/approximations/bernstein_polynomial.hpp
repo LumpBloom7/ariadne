@@ -32,29 +32,49 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
     BernsteinPolynomial(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients},
                                                                _precision(coefficients[0].precision()), _degree(coefficients.size()), degreeReciprocal(rec(T(_degree, _precision))), zero(Bounds<T>(_precision)) {}
-    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision, int secantIters = 5)
+    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision)
         : _precision(precision), _degree(degree), degreeReciprocal(rec(T(degree, precision))), zero(Bounds<T>(precision)) {
         generateCoefficients(function);
         computeDerivEndpoints();
-        findCriticalPoints(secantIters);
     }
 
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
-        auto y1 = evaluate_impl(x.lower_raw());
-        auto y2 = evaluate_impl(x.upper_raw());
+    /*     virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
+            auto y1 = evaluate_impl(x.lower_raw());
+            auto y2 = evaluate_impl(x.upper_raw());
 
-        auto mini = min(y1.lower_raw(), y2.upper_raw());
-        auto maxi = max(y1.upper_raw(), y2.upper_raw());
+            auto mini = min(y1.lower_raw(), y2.upper_raw());
+            auto maxi = max(y1.upper_raw(), y2.upper_raw());
 
-        for (const CriticalPoint &criticalPoint: _criticalPoints) {
-            if (decide(criticalPoint.xPosition > x.upper_raw()))
-                break;
+            for (const CriticalPoint &criticalPoint: _criticalPoints) {
+                if (decide(criticalPoint.xPosition > x.upper_raw()))
+                    break;
 
-            if (criticalPoint.xPosition < x.lower_raw())
-                continue;
+                if (criticalPoint.xPosition < x.lower_raw())
+                    continue;
 
-            mini = min(mini, criticalPoint.value.lower_raw()),
-            maxi = max(maxi, criticalPoint.value.upper_raw());
+                mini = min(mini, criticalPoint.value.lower_raw()),
+                maxi = max(maxi, criticalPoint.value.upper_raw());
+            }
+
+            return Bounds<T>(mini, maxi);
+        }
+     */
+    virtual Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const override {
+        auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
+
+        auto subinterval = Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
+
+        auto y1 = evaluate_impl(subinterval);
+
+        auto mini = y1.lower_raw();
+        auto maxi = y1.upper_raw();
+
+        for (int i = 1; i < subIntervals; ++i) {
+            subinterval += stepSize;
+            auto res = evaluate_impl(subinterval);
+
+            mini = min(mini, res.lower_raw()),
+            maxi = max(maxi, res.upper_raw());
         }
 
         return Bounds<T>(mini, maxi);
@@ -63,7 +83,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const override {
         return evaluate_impl(x);
     }
-
 
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
@@ -148,27 +167,11 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
   protected:
     Bounds<T> evaluate_impl(const Bounds<T> &x) const {
-        if ((x == 1).repr() >= LogicalValue::LIKELY)
-            return *(_coefficients.end() - 1);
-        else if ((x == 0).repr() >= LogicalValue::LIKELY)
-            return _coefficients[0];
-
         auto sum = zero;
-
-        auto OneMinX = 1 - x;
-        auto oneMinXRec = rec(OneMinX);
-
-        auto xPow = pow(x, 0);
-        auto xMinPow = pow(OneMinX, _degree);
-
         for (size_t i = 0; i <= _degree; ++i) {
             auto bp = bernsteinBasisPolynomialFor(i, _degree, x);
             sum = fma(bp, _coefficients[i], sum);
-
-            xPow *= x;
-            xMinPow *= oneMinXRec;
         }
-
         return sum;
     }
 
@@ -309,7 +312,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         for (int i = 0; i < iterations; ++i) {
             if (decide(max(s[0], s[1]) <= x.lower_raw()))
                 break;
-                
+
             if (!secantMethod_impl(s, leftval))
                 break;
         }

@@ -9,18 +9,18 @@
 namespace Ariadne {
 
 template<typename T>
-auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon) {
+auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon, int maxDepth = 1, int subIntervals = 1) {
     DegreeType degree = 1;
 
     std::shared_ptr<IPolynomialApproximation<T>> b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
-    auto bounded = BoundedPolynomialApproximation(function, b, epsilon);
+    auto bounded = BoundedPolynomialApproximation(function, b, epsilon, maxDepth, subIntervals);
 
     while (!decide(bounded.maximumError() < epsilon)) {
         std::cout << degree << " " << bounded.maximumError() << std::endl;
 
         degree *= 2;
         b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
-        bounded = BoundedPolynomialApproximation(function, b, epsilon);
+        bounded = BoundedPolynomialApproximation(function, b, epsilon, maxDepth, subIntervals);
     }
 
     return bounded;

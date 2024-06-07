@@ -31,7 +31,7 @@ class LagrangePolynomial : virtual public IPolynomialApproximation<T> {
         generateCoefficients(function);
     }
 
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
+    virtual Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const override {
         Bounds<T> sum = zero;
 
         auto l = zero + 1;

@@ -18,7 +18,7 @@ class IPolynomialApproximation {
 
   public:
     ~IPolynomialApproximation() {}
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const = 0;
+    virtual Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const = 0;
     virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const {
         return evaluate(x);
     }

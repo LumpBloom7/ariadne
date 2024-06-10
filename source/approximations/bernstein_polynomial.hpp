@@ -151,9 +151,32 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
   protected:
     Bounds<T> evaluate_impl(const Bounds<T> &x) const {
         auto sum = zero;
+
+        auto OneMinX = 1 - x;
+
+        auto xPow = pow(x, 0);
+        auto OneMinXPow = pow(OneMinX, 0);
+
+        std::stack<Bounds<T>> oneMinXPow = {};
+
+        // Computing (1-x)^n, then dividing by (1-x) to reduce the power is not ideal due to potential (1/0) error
+        // Instead we do it backwards, and store the result in a stack (Multiplying by 0 is well defined)
+        // This incurs a slight memory overhead, but the benefit of removing pow(1-x, i) is worth it.
+        for (int i = 0; i <= _degree; ++i) {
+            oneMinXPow.emplace(OneMinXPow);
+            OneMinXPow *= OneMinX;
+        }
+
         for (size_t i = 0; i <= _degree; ++i) {
-            auto bp = bernsteinBasisPolynomialFor(i, _degree, x);
+            // xPow is multiplied incrementally, this is fine a 0^x is always valid
+            // I want to do the same for the 1-x part, but 0^-1 is not valid, and the default pow function handles is just fine
+            auto bp = xPow * oneMinXPow.top();
+
+            oneMinXPow.pop();
+
             sum = fma(bp, _coefficients[i], sum);
+
+            xPow *= x;
         }
         return sum;
     }

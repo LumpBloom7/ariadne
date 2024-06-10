@@ -1,4 +1,4 @@
-#include "approximations/bernstein_polynomial_shared.hpp"
+#include "approximations/bernstein_polynomial.hpp"
 
 #include "numeric/rational.hpp"
 #include "utility/hash_numeric.hpp"

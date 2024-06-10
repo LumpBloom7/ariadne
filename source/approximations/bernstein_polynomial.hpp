@@ -5,8 +5,9 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <stack>
 
-#include "approximations/bernstein_polynomial_shared.hpp"
+#include "approximations/polynomial_approximation_interface.hpp"
 #include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/float_error.hpp"
@@ -19,6 +20,11 @@
 #include "utility/hash_tuple.hpp"
 #include "utility/standard.hpp"
 namespace Ariadne {
+
+class IBernsteinPolynomialBase {
+  protected:
+    static SimpleCache<Integer, Nat64, Nat64> binomialCoefficients;
+};
 
 template<typename T>
 class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
@@ -38,28 +44,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         computeDerivEndpoints();
     }
 
-    /*     virtual Bounds<T> evaluate(const Bounds<T> &x) const override {
-            auto y1 = evaluate_impl(x.lower_raw());
-            auto y2 = evaluate_impl(x.upper_raw());
-
-            auto mini = min(y1.lower_raw(), y2.upper_raw());
-            auto maxi = max(y1.upper_raw(), y2.upper_raw());
-
-            for (const CriticalPoint &criticalPoint: _criticalPoints) {
-                if (decide(criticalPoint.xPosition > x.upper_raw()))
-                    break;
-
-                if (criticalPoint.xPosition < x.lower_raw())
-                    continue;
-
-                mini = min(mini, criticalPoint.value.lower_raw()),
-                maxi = max(maxi, criticalPoint.value.upper_raw());
-            }
-
-            return Bounds<T>(mini, maxi);
-        }
-     */
-    virtual Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const override {
+    Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
         auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
 
         auto subinterval = Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
@@ -80,11 +65,11 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return Bounds<T>(mini, maxi);
     }
 
-    virtual Bounds<T> evaluateRaw(const Bounds<T> &x) const override {
+    Bounds<T> evaluateRaw(const Bounds<T> &x) const final {
         return evaluate_impl(x);
     }
 
-    virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const override {
+    Bounds<T> evaluateDerivative(const Bounds<T> &x) const final {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
         auto y2 = evaluate_deriv_impl(x.upper_raw());
 
@@ -95,11 +80,11 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return res;
     }
 
-    virtual DegreeType degree() const override {
+    DegreeType degree() const final {
         return _degree;
     };
 
-    virtual PR precision() const override {
+    PR precision() const final {
         return _precision;
     }
 
@@ -114,8 +99,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         }
         return beta[0];
     }
-
-    Bounds<T> operator()(const Bounds<T> &x) const { return evaluate(x); }
 
     BernsteinPolynomial<T> operator+(const BernsteinPolynomial<T> &other) const {
         if (other._degree != _degree)

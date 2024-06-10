@@ -1,15 +1,10 @@
-#ifndef ARIADNE_BERNSTEIN_POLYNOMIAL_SHARED_HPP
-#define ARIADNE_BERNSTEIN_POLYNOMIAL_SHARED_HPP
+#ifndef ARIADNE_POLYNOMIAL_APPROXIMATION_INTERFACE_HPP
+#define ARIADNE_POLYNOMIAL_APPROXIMATION_INTERFACE_HPP
 
 #include "utility/cache.hpp"
 #include "utility/factorials.hpp"
 
 namespace Ariadne {
-class IBernsteinPolynomialBase {
-  protected:
-    static SimpleCache<Integer, Nat64, Nat64> binomialCoefficients;
-};
-
 template<typename T>
 class IPolynomialApproximation {
   protected:

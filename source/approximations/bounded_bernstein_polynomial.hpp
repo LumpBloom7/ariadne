@@ -39,6 +39,11 @@ class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
         computeErrorBounds(function, epsilon, depth, subintervals);
     }
 
+    BoundedPolynomialApproximation(const std::function<TBounds(TBounds)> &function, const std::shared_ptr<IPolynomialApproximation<T>> &approximationPtr, PositiveUpperBound<T> epsilon, const T &minimumIntervalWidth, int subintervals = 1)
+        : originalPoly(approximationPtr) {
+        computeErrorBounds(function, epsilon, minimumIntervalWidth, subintervals);
+    }
+
     virtual TBounds evaluate(const TBounds &x, int subInterval = 1) const override {
         return originalPoly->evaluate(x, subInterval);
     }
@@ -93,6 +98,61 @@ class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
 
         return maximum;
     }
+    void computeErrorBounds(const std::function<TBounds(TBounds)> &function, const PositiveUpperBound<T> &targetEpsilon, const T &minimumIntervalWidth, int subintervals = 1) {
+        auto degree = this->degree();
+
+        _errorBounds.clear();
+        _errorBounds.reserve(degree);
+
+        auto zero = TBounds(this->precision());
+        auto degreeReciprocal = rec(TBounds(degree, zero.precision()));
+
+        auto x = TBounds(zero.lower_raw(), degreeReciprocal.upper_raw());
+
+        for (int i = 1; i <= degree; ++i) {
+            auto error = computeErrorBounds(function, x, targetEpsilon, minimumIntervalWidth, subintervals);
+            _errorBounds.emplace_back(error);
+
+            if (decide(error > targetEpsilon))
+                return;
+
+            x += degreeReciprocal;
+        }
+    }
+    PositiveUpperBound<T> computeErrorBounds(const std::function<TBounds(TBounds)> &function, const TBounds &interval, const PositiveUpperBound<T> &targetEpsilon, const T &minimumIntervalWidth, int subintervals = 1) {
+        auto actual = function(interval);
+        auto error = mag(actual.upper_raw() - actual.lower_raw());
+
+        if (decide(error <= targetEpsilon)) {
+            auto predicted = evaluate(interval);
+            error = mag(actual - predicted);
+        }
+
+        if (subintervals == 1) // We're not making subintervals smaller, no point continuing
+            return error;
+
+        if (decide(error > targetEpsilon)) {
+            auto intervalWidth = interval.upper_raw() - interval.lower_raw();
+
+            // We don't want to go any thinner, return immediately.
+            if (decide(intervalWidth <= minimumIntervalWidth))
+                return error;
+
+            auto step = intervalWidth / subintervals;
+            auto subinterval = TBounds(interval.lower_raw(), UpperBound<T>(interval.lower_raw() + step));
+            PositiveUpperBound<T> maxSubError = PositiveUpperBound<T>(this->precision());
+
+            for (int i = 0; i < subintervals; ++i) {
+                auto subError = computeErrorBounds(function, subinterval, targetEpsilon, minimumIntervalWidth, subintervals);
+                maxSubError = max(subError, maxSubError);
+                subinterval += step;
+            }
+
+            error = maxSubError;
+        }
+
+        return error;
+    }
 
     void computeErrorBounds(const std::function<TBounds(TBounds)> &function, const PositiveUpperBound<T> &targetEpsilon, int depth = 1, int subintervals = 1) {
         auto degree = this->degree();
@@ -106,7 +166,7 @@ class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
         auto x = TBounds(zero.lower_raw(), degreeReciprocal.upper_raw());
 
         for (int i = 1; i <= degree; ++i) {
-            auto error = computeErrorBounds(function, x, targetEpsilon, depth - 1, subintervals);
+            auto error = computeErrorBounds(function, x, targetEpsilon, depth, subintervals);
             _errorBounds.emplace_back(error);
 
             if (decide(error > targetEpsilon))
@@ -117,41 +177,34 @@ class BoundedPolynomialApproximation : public IPolynomialApproximation<T> {
     }
 
     PositiveUpperBound<T> computeErrorBounds(const std::function<TBounds(TBounds)> &function, const TBounds &interval, const PositiveUpperBound<T> &targetEpsilon, int depth = 1, int subintervals = 1) {
-        if (depth == 0) { // Base case
-            auto actual = function(interval);
-            auto predicted = this->evaluate(interval, subintervals);
+        auto actual = function(interval);
+        auto error = mag(actual.upper_raw() - actual.lower_raw());
 
-            auto error = mag(actual - predicted);
+        if (decide(error <= targetEpsilon)) {
+            auto predicted = evaluate(interval);
+            error = mag(actual - predicted);
+        }
 
+        if (depth == 0 || subintervals == 1) // We're not making subintervals smaller, no point continuing
             return error;
+
+        if (decide(error > targetEpsilon)) {
+            auto intervalWidth = interval.upper_raw() - interval.lower_raw();
+
+            auto step = intervalWidth / subintervals;
+            auto subinterval = TBounds(interval.lower_raw(), UpperBound<T>(interval.lower_raw() + step));
+            PositiveUpperBound<T> maxSubError = PositiveUpperBound<T>(this->precision());
+
+            for (int i = 0; i < subintervals; ++i) {
+                auto subError = computeErrorBounds(function, subinterval, targetEpsilon, depth - 1, subintervals);
+                maxSubError = max(subError, maxSubError);
+                subinterval += step;
+            }
+
+            error = maxSubError;
         }
 
-        auto step = (interval.upper_raw() - interval.lower_raw()) / subintervals;
-        auto x = TBounds(interval.lower_raw(), UpperBound<T>(interval.lower_raw() + step));
-        PositiveUpperBound<T> maxError = PositiveUpperBound<T>(this->precision());
-
-        for (int i = 0; i < subintervals; ++i) {
-            auto actual = function(x);
-            auto error = mag(actual.upper_raw() - actual.lower_raw());
-
-            if (decide(error <= targetEpsilon)) {
-                auto predicted = this->evaluate(x);
-                error = mag(actual - predicted);
-            }
-
-            if (decide(error > targetEpsilon)) {
-                error = computeErrorBounds(function, x, targetEpsilon, depth - 1, subintervals);
-            }
-
-            maxError = max(error, maxError);
-
-            if (decide(error > targetEpsilon)) {
-                break;
-            }
-            x += step;
-        }
-
-        return maxError;
+        return error;
     }
 
     void computeErrorBounds(const std::function<TBounds(TBounds)> &function, int subintervals = 1) {

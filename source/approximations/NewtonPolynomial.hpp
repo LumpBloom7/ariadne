@@ -1,7 +1,7 @@
 #ifndef ARIADNE_NEWTON_POLYNOMIAL_HPP
 #define ARIADNE_NEWTON_POLYNOMIAL_HPP
 
-#include "bernstein_polynomial_shared.hpp"
+#include "approximations/polynomial_approximation_interface.hpp"
 #include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/float_error.hpp"

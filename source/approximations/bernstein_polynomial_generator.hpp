@@ -4,6 +4,7 @@
 #include <exception>
 #include <memory>
 
+#include "approximations/bernstein_polynomial.hpp"
 #include "approximations/bounded_bernstein_polynomial.hpp"
 
 namespace Ariadne {

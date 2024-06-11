@@ -3,22 +3,16 @@
 
 #include <cmath>
 #include <functional>
-#include <iostream>
-#include <optional>
 #include <stack>
 
 #include "approximations/polynomial_approximation_interface.hpp"
 #include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
-#include "numeric/float_error.hpp"
-#include "numeric/floatmp.hpp"
 #include "numeric/integer.hpp"
 #include "numeric/real.hpp"
-#include "numeric/validated_real.hpp"
 #include "utility/hash.hpp"
-#include "utility/hash_numeric.hpp"
+#include "utility/hash_gmp.hpp"
 #include "utility/hash_tuple.hpp"
-#include "utility/standard.hpp"
 namespace Ariadne {
 
 class IBernsteinPolynomialBase {
@@ -36,10 +30,16 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     PR _precision;
     DegreeType _degree;
 
-    BernsteinPolynomial(std::vector<Bounds<T>> coefficients) : _coefficients{coefficients},
-                                                               _precision(coefficients[0].precision()), _degree(coefficients.size()), degreeReciprocal(rec(T(_degree, _precision))), zero(Bounds<T>(_precision)) {}
-    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision)
-        : _precision(precision), _degree(degree), degreeReciprocal(rec(T(degree, precision))), zero(Bounds<T>(precision)) {
+    BernsteinPolynomial(std::vector<Bounds<T>> coefficients)
+        : _coefficients{coefficients}, _precision(coefficients[0].precision()),
+          _degree(coefficients.size()),
+          degreeReciprocal(rec(T(_degree, _precision))),
+          zero(Bounds<T>(_precision)) {}
+    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function,
+                        DegreeType degree, PR precision)
+        : _precision(precision), _degree(degree),
+          degreeReciprocal(rec(T(degree, precision))),
+          zero(Bounds<T>(precision)) {
         generateCoefficients(function);
         computeDerivEndpoints();
     }
@@ -48,7 +48,8 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
         auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
 
-        auto subinterval = Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
+        auto subinterval =
+            Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
 
         auto y1 = evaluate_impl(subinterval);
 
@@ -59,15 +60,20 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
             subinterval += stepSize;
             auto res = evaluate_impl(subinterval);
 
-            mini = min(mini, res.lower_raw()),
-            maxi = max(maxi, res.upper_raw());
+            mini = min(mini, res.lower_raw()), maxi = max(maxi, res.upper_raw());
         }
 
         return Bounds<T>(mini, maxi);
     }
 #else
     Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
+        // Skip OpenMP overheads
+        if (subIntervals == 1)
+            return evaluate_impl(x);
+
         auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
+        auto interval =
+            Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
 
         std::vector<Bounds<T>> results{};
 
@@ -76,8 +82,9 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
 #pragma omp parallel for
         for (int i = 0; i < subIntervals; ++i) {
-            auto subinterval = x.lower_raw() + (stepSize * i);
-            results[i] = evaluate_impl(subinterval);
+            auto subinterval = interval + (stepSize * i);
+
+            results[i] = evaluate_impl(interval);
         }
 
         auto mini = results[0].lower_raw();
@@ -100,20 +107,15 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         auto y1 = evaluate_deriv_impl(x.lower_raw());
         auto y2 = evaluate_deriv_impl(x.upper_raw());
 
-        auto res = Bounds<T>(
-            min(y1.lower_raw(), y2.lower_raw()),
-            max(y1.upper(), y2.upper()));
+        auto res = Bounds<T>(min(y1.lower_raw(), y2.lower_raw()),
+                             max(y1.upper(), y2.upper()));
 
         return res;
     }
 
-    DegreeType degree() const final {
-        return _degree;
-    };
+    DegreeType degree() const final { return _degree; };
 
-    PR precision() const final {
-        return _precision;
-    }
+    PR precision() const final { return _precision; }
 
     Bounds<T> DeCasteljau(const Bounds<T> &x) const {
         std::vector<Bounds<T>> beta = std::vector<Bounds<T>>(_coefficients);
@@ -176,7 +178,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     }
 
   protected:
-#ifndef _OPENMP2
     Bounds<T> evaluate_impl(const Bounds<T> &x) const {
         auto sum = zero;
 
@@ -187,9 +188,11 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
         std::stack<Bounds<T>> oneMinXPow = {};
 
-        // Computing (1-x)^n, then dividing by (1-x) to reduce the power is not ideal due to potential (1/0) error
-        // Instead we do it backwards, and store the result in a stack (Multiplying by 0 is well defined)
-        // This incurs a slight memory overhead, but the benefit of removing pow(1-x, i) is worth it.
+        // Computing (1-x)^n, then dividing by (1-x) to reduce the power is not
+        // ideal due to potential (1/0) error Instead we do it backwards, and store
+        // the result in a stack (Multiplying by 0 is well defined) This incurs a
+        // slight memory overhead, but the benefit of removing pow(1-x, i) is worth
+        // it.
         for (int i = 0; i <= _degree; ++i) {
             oneMinXPow.emplace(OneMinXPow);
             OneMinXPow *= OneMinX;
@@ -197,7 +200,8 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
         for (size_t i = 0; i <= _degree; ++i) {
             // xPow is multiplied incrementally, this is fine a 0^x is always valid
-            // I want to do the same for the 1-x part, but 0^-1 is not valid, and the default pow function handles is just fine
+            // I want to do the same for the 1-x part, but 0^-1 is not valid, and the
+            // default pow function handles is just fine
             auto bp = xPow * oneMinXPow.top();
 
             oneMinXPow.pop();
@@ -208,82 +212,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         }
         return sum;
     }
-#else
-    Bounds<T> evaluate_impl(const Bounds<T> &x) const {
-        const int taskSize = 10;
-
-        int fullBatches = (_degree) / taskSize;
-        int remainder = (_degree) % taskSize;
-
-        int batches = fullBatches + (remainder > 0 ? 1 : 0);
-
-        std::vector<Bounds<T>> sums{};
-
-        // Prep vector zones
-        for (int i = 0; i < batches; ++i)
-            sums.emplace_back(zero);
-
-#pragma omp parallel
-        {
-#pragma omp single
-            {
-                int batchNum = 0;
-                int begin = 0;
-                for (int i = 0; i < fullBatches; ++i) {
-
-#pragma omp task
-                    evaluate_division(x, begin, begin + taskSize - 1, sums, batchNum++);
-
-                    begin += taskSize;
-                }
-
-                if (remainder > 0) {
-#pragma omp task
-                    evaluate_division(x, begin, _degree, sums, batchNum++);
-                }
-            }
-        }
-
-        auto sum = zero;
-        for (auto &partial: sums) {
-            sum += partial;
-        }
-
-        return sum;
-    }
-
-    void evaluate_division(const Bounds<T> &x, int begin, int end, std::vector<Bounds<T>> &sums, int id) const {
-        auto sum = zero;
-
-        auto OneMinX = 1 - x;
-
-        auto xPow = pow(x, begin);
-        auto OneMinXPow = pow(OneMinX, begin);
-
-        std::stack<Bounds<T>> oneMinXPow = {};
-
-        // Computing (1-x)^n, then dividing by (1-x) to reduce the power is not ideal due to potential (1/0) error
-        // Instead we do it backwards, and store the result in a stack (Multiplying by 0 is well defined)
-        // This incurs a slight memory overhead, but the benefit of removing pow(1-x, i) is worth it.
-        for (int i = begin; i <= end; ++i) {
-            oneMinXPow.emplace(OneMinXPow);
-            OneMinXPow *= OneMinX;
-        }
-
-        for (size_t i = begin; i <= end; ++i) {
-            // xPow is multiplied incrementally, this is fine a 0^x is always valid
-            // I want to do the same for the 1-x part, but 0^-1 is not valid, and the default pow function handles is just fine
-            auto bp = xPow * oneMinXPow.top();
-
-            oneMinXPow.pop();
-
-            sum = fma(bp, _coefficients[i], sum);
-
-            xPow *= x;
-        }
-        sums[id] = sum;
-    }
-#endif
 
     Bounds<T> evaluate_deriv_impl(const T &x) const {
         if ((x == 1).repr() >= LogicalValue::LIKELY)
@@ -291,8 +219,8 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         else if ((x == 0).repr() >= LogicalValue::LIKELY)
             return _derivativeEndpoints[0];
 
-        // Derivative of the bernstein is just the sum of basis derivatives (Sum rule)
-        // b_(k,n)'(x) = (nCk) * x^(k-1) * (1-x)^(n-k)*  (k-nx)
+        // Derivative of the bernstein is just the sum of basis derivatives (Sum
+        // rule) b_(k,n)'(x) = (nCk) * x^(k-1) * (1-x)^(n-k)*  (k-nx)
         auto sum = zero;
 
         auto OneMinX = 1 - x;
@@ -315,7 +243,8 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return sum;
     }
 
-    void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)> &function) {
+    void
+        generateCoefficients(const std::function<Bounds<T>(Bounds<T>)> &function) {
         _coefficients.clear();
         _coefficients.reserve(_degree + 1);
 
@@ -390,14 +319,15 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         }
     }
 
-    static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T> &x) {
+    static Bounds<T> bernsteinBasisPolynomialFor(int v, int n,
+                                                 const Bounds<T> &x) {
         return pow(x, v) * pow(1 - x, n - v);
     }
 
-    const Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
-        T s[]{
-            x.lower_raw(),
-            x.upper_raw()};
+    const Bounds<T>
+        secantMethod(const Bounds<T> &x,
+                     const PositiveUpperBound<T> &targetEpsilon) const {
+        T s[]{x.lower_raw(), x.upper_raw()};
 
         auto leftval = this->evaluate_deriv_impl(s[0]);
 
@@ -413,9 +343,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     }
 
     const Bounds<T> secantMethod(const Bounds<T> &x, int iterations = 1) const {
-        T s[]{
-            x.lower_raw(),
-            x.upper_raw()};
+        T s[]{x.lower_raw(), x.upper_raw()};
 
         auto leftval = this->evaluate_deriv_impl(s[0]);
 
@@ -439,7 +367,9 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
         auto rightDeriv = this->evaluate_deriv_impl(right);
 
-        auto res = (right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv))).value();
+        auto res =
+            (right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv)))
+                .value();
 
         if (is_nan(res))
             return false;

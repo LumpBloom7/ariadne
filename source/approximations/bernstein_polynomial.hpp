@@ -44,6 +44,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         computeDerivEndpoints();
     }
 
+#ifndef _OPENMP
     Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
         auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
 
@@ -64,6 +65,32 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
         return Bounds<T>(mini, maxi);
     }
+#else
+    Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
+        auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
+
+        std::vector<Bounds<T>> results{};
+
+        for (int i = 0; i < subIntervals; ++i)
+            results.emplace_back(zero);
+
+#pragma omp parallel for
+        for (int i = 0; i < subIntervals; ++i) {
+            auto subinterval = x.lower_raw() + (stepSize * i);
+            results[i] = evaluate_impl(subinterval);
+        }
+
+        auto mini = results[0].lower_raw();
+        auto maxi = results[0].upper_raw();
+        for (int i = 1; i < subIntervals; ++i) {
+            auto &res = results[i];
+            mini = min(mini, res.lower_raw());
+            maxi = max(maxi, res.upper_raw());
+        }
+
+        return Bounds<T>(mini, maxi);
+    }
+#endif
 
     Bounds<T> evaluateRaw(const Bounds<T> &x) const final {
         return evaluate_impl(x);
@@ -149,6 +176,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     }
 
   protected:
+#ifndef _OPENMP2
     Bounds<T> evaluate_impl(const Bounds<T> &x) const {
         auto sum = zero;
 
@@ -180,6 +208,82 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         }
         return sum;
     }
+#else
+    Bounds<T> evaluate_impl(const Bounds<T> &x) const {
+        const int taskSize = 10;
+
+        int fullBatches = (_degree) / taskSize;
+        int remainder = (_degree) % taskSize;
+
+        int batches = fullBatches + (remainder > 0 ? 1 : 0);
+
+        std::vector<Bounds<T>> sums{};
+
+        // Prep vector zones
+        for (int i = 0; i < batches; ++i)
+            sums.emplace_back(zero);
+
+#pragma omp parallel
+        {
+#pragma omp single
+            {
+                int batchNum = 0;
+                int begin = 0;
+                for (int i = 0; i < fullBatches; ++i) {
+
+#pragma omp task
+                    evaluate_division(x, begin, begin + taskSize - 1, sums, batchNum++);
+
+                    begin += taskSize;
+                }
+
+                if (remainder > 0) {
+#pragma omp task
+                    evaluate_division(x, begin, _degree, sums, batchNum++);
+                }
+            }
+        }
+
+        auto sum = zero;
+        for (auto &partial: sums) {
+            sum += partial;
+        }
+
+        return sum;
+    }
+
+    void evaluate_division(const Bounds<T> &x, int begin, int end, std::vector<Bounds<T>> &sums, int id) const {
+        auto sum = zero;
+
+        auto OneMinX = 1 - x;
+
+        auto xPow = pow(x, begin);
+        auto OneMinXPow = pow(OneMinX, begin);
+
+        std::stack<Bounds<T>> oneMinXPow = {};
+
+        // Computing (1-x)^n, then dividing by (1-x) to reduce the power is not ideal due to potential (1/0) error
+        // Instead we do it backwards, and store the result in a stack (Multiplying by 0 is well defined)
+        // This incurs a slight memory overhead, but the benefit of removing pow(1-x, i) is worth it.
+        for (int i = begin; i <= end; ++i) {
+            oneMinXPow.emplace(OneMinXPow);
+            OneMinXPow *= OneMinX;
+        }
+
+        for (size_t i = begin; i <= end; ++i) {
+            // xPow is multiplied incrementally, this is fine a 0^x is always valid
+            // I want to do the same for the 1-x part, but 0^-1 is not valid, and the default pow function handles is just fine
+            auto bp = xPow * oneMinXPow.top();
+
+            oneMinXPow.pop();
+
+            sum = fma(bp, _coefficients[i], sum);
+
+            xPow *= x;
+        }
+        sums[id] = sum;
+    }
+#endif
 
     Bounds<T> evaluate_deriv_impl(const T &x) const {
         if ((x == 1).repr() >= LogicalValue::LIKELY)

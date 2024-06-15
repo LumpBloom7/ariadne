@@ -155,7 +155,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
             _coefficients[i] = cast_exact(Approximation<T>(_coefficients[i] + other._coefficients[i]));
 
         computeDerivEndpoints();
-        findCriticalPoints();
         return *this;
     }
 
@@ -167,7 +166,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
             _coefficients[i] -= other._coefficients[i];
 
         computeDerivEndpoints();
-        findCriticalPoints();
         return *this;
     }
 
@@ -259,130 +257,16 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
                                 (_coefficients[_degree - 1] - _coefficients[_degree]) * _degree};
     }
 
-    void findCriticalPoints(int secantIterations = 5) {
-        _criticalPoints.clear();
-
-        if (secantIterations == 0)
-            return;
-
-        Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal.upper_raw());
-
-        T lastCritX = x.lower_raw();
-
-        for (size_t i = 1; i <= _degree; ++i, x += degreeReciprocal) {
-            if (decide(x.upper_raw() < lastCritX)) {
-                continue;
-            }
-
-            Bounds<T> criticalPoint = secantMethod(x, secantIterations);
-            lastCritX = criticalPoint.lower_raw();
-
-            T critX = criticalPoint.value_raw();
-
-            if (!models(x, critX))
-                continue;
-
-            Bounds<T> value = this->evaluate_impl(critX);
-
-            _criticalPoints.emplace_back(CriticalPoint(critX, value));
-        }
-    }
-
-    void findCriticalPoints(const PositiveUpperBound<T> &targetEpsilon) {
-        _criticalPoints.clear();
-
-        Bounds<T> x = Bounds<T>(zero.lower_raw(), degreeReciprocal);
-
-        T lastCritX = x.value_raw();
-
-        for (size_t i = 1; i <= _degree; ++i) {
-            if (decide(x.upper_raw() < lastCritX))
-                continue;
-
-            Bounds<T> criticalPoint = secantMethod(x, targetEpsilon);
-
-            T critX = criticalPoint.value_raw();
-
-            if (!models(x, critX))
-                continue;
-
-            Bounds<T> value = this->evaluate_impl(critX);
-
-            _criticalPoints.emplace_back(CriticalPoint(critX, value));
-
-            x += degreeReciprocal;
-        }
-    }
-
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T> &x) {
         return pow(x, v) * pow(1 - x, n - v);
     }
 
-    const Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
-        T s[]{x.lower_raw(), x.upper_raw()};
 
-        auto leftval = this->evaluate_deriv_impl(s[0]);
-
-        while ((mag(s[1] - s[0]) > targetEpsilon).repr() >= LogicalValue::LIKELY)
-            if (!secantMethod_impl(s, leftval))
-                break;
-        ;
-
-        auto mini = min(s[0], s[1]);
-        auto maxi = max(s[0], s[1]);
-
-        return Bounds<T>(mini, maxi);
-    }
-
-    const Bounds<T> secantMethod(const Bounds<T> &x, int iterations = 1) const {
-        T s[]{x.lower_raw(), x.upper_raw()};
-
-        auto leftval = this->evaluate_deriv_impl(s[0]);
-
-        for (int i = 0; i < iterations; ++i) {
-            if (decide(max(s[0], s[1]) <= x.lower_raw()))
-                break;
-
-            if (!secantMethod_impl(s, leftval))
-                break;
-        }
-
-        auto mini = min(s[0], s[1]);
-        auto maxi = max(s[0], s[1]);
-
-        return Bounds<T>(mini, maxi);
-    }
-
-    bool secantMethod_impl(T (&x)[2], Bounds<T> &leftDeriv) const {
-        auto &left = x[0];
-        auto &right = x[1];
-
-        auto rightDeriv = this->evaluate_deriv_impl(right);
-
-        auto res = (right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv))).value();
-
-        if (is_nan(res))
-            return false;
-
-        x[0] = x[1];
-        x[1] = res;
-        leftDeriv = rightDeriv;
-        return true;
-    }
 
     std::vector<T> _coefficients{};
     std::vector<Bounds<T>> _derivativeEndpoints;
     Bounds<T> degreeReciprocal;
     Bounds<T> zero;
-
-    struct CriticalPoint {
-        CriticalPoint(T xPos, Bounds<T> val) : xPosition(xPos), value(val) {}
-
-        const T xPosition;
-        const Bounds<T> value;
-    };
-
-    std::vector<CriticalPoint> _criticalPoints{};
 };
 
 } // namespace Ariadne

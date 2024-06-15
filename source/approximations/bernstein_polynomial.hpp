@@ -6,6 +6,7 @@
 #include <stack>
 
 #include "approximations/polynomial_approximation_interface.hpp"
+#include "numeric/builtin.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/integer.hpp"
 #include "numeric/real.hpp"
@@ -141,7 +142,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         auto coefficients = _coefficients;
 
         for (int i = 0; i < _degree; ++i)
-            coefficients[i] -= other._coefficients[i];
+            _coefficients[i] = cast_exact(Approximation<T>(_coefficients[i] + other._coefficients[i]));
 
         return BernsteinPolynomial<T>(coefficients);
     }
@@ -151,7 +152,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
             throw std::runtime_error("Degree of both polynomials do not match");
 
         for (int i = 0; i < _degree; ++i)
-            _coefficients[i] += other._coefficients[i];
+            _coefficients[i] = cast_exact(Approximation<T>(_coefficients[i] + other._coefficients[i]));
 
         computeDerivEndpoints();
         findCriticalPoints();
@@ -245,7 +246,10 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
             int v2 = (i * 2 >= _degree) ? (_degree - i) : i;
             auto res = function(x) * binomialCoefficients(_degree, v2);
 
-            _coefficients.emplace_back(res);
+            auto approximation = Approximation<T>(res);
+            auto exact = cast_exact(approximation);
+
+            _coefficients.emplace_back(exact);
             x += degreeReciprocal;
         }
     }
@@ -366,7 +370,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return true;
     }
 
-    std::vector<Bounds<T>> _coefficients{};
+    std::vector<T> _coefficients{};
     std::vector<Bounds<T>> _derivativeEndpoints;
     Bounds<T> degreeReciprocal;
     Bounds<T> zero;

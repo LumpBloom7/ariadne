@@ -6,13 +6,15 @@
 #include <stack>
 
 #include "approximations/polynomial_approximation_interface.hpp"
-#include "numeric/float_approximation.hpp"
 #include "numeric/float_bounds.hpp"
 #include "numeric/integer.hpp"
 #include "numeric/real.hpp"
+#include "utility/cache.hpp"
+#include "utility/factorials.hpp"
 #include "utility/hash.hpp"
 #include "utility/hash_gmp.hpp"
 #include "utility/hash_tuple.hpp"
+
 namespace Ariadne {
 
 class IBernsteinPolynomialBase {

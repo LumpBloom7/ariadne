@@ -2,8 +2,7 @@
 #define ARIADNE_POLYNOMIAL_APPROXIMATION_INTERFACE_HPP
 
 #include "geometry/interval.hpp"
-#include "utility/cache.hpp"
-#include "utility/factorials.hpp"
+
 
 namespace Ariadne {
 template<typename T> class IPolynomialApproximation {
@@ -25,7 +24,7 @@ template<typename T> class IPolynomialApproximation {
 
   protected:
     Interval<T> toInterval(const Bounds<T> &bounds) const { return Interval<T>(bounds._l, bounds._u); }
-    Bounds<T> fromInterval(const Interval<T> &interval)const  { return cast_singleton(interval); }
+    Bounds<T> fromInterval(const Interval<T> &interval) const { return cast_singleton(interval); }
 };
 
 } // namespace Ariadne

@@ -31,27 +31,22 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     DegreeType _degree;
 
     BernsteinPolynomial(std::vector<Bounds<T>> coefficients)
-        : _coefficients{coefficients}, _precision(coefficients[0].precision()),
-          _degree(coefficients.size()),
-          degreeReciprocal(rec(T(_degree, _precision))),
-          zero(Bounds<T>(_precision)) {}
-    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function,
-                        DegreeType degree, PR precision)
-        : _precision(precision), _degree(degree),
-          degreeReciprocal(rec(T(degree, precision))),
+        : _coefficients{coefficients}, _precision(coefficients[0].precision()), _degree(coefficients.size()),
+          degreeReciprocal(rec(T(_degree, _precision))), zero(Bounds<T>(_precision)) {}
+    BernsteinPolynomial(const std::function<Bounds<T>(Bounds<T>)> &function, DegreeType degree, PR precision)
+        : _precision(precision), _degree(degree), degreeReciprocal(rec(T(degree, precision))),
           zero(Bounds<T>(precision)) {
         generateCoefficients(function);
         computeDerivEndpoints();
     }
 
 #ifndef _OPENMP
-    Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
+    Bounds<T> apply(const Interval<T> &x, Nat subIntervals = 1) const final {
         auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
 
-        auto subinterval =
-            Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
+        auto subinterval = Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
 
-        auto y1 = evaluate_impl(subinterval);
+        auto y1 = evaluate_impl(fromInterval(subinterval));
 
         auto mini = y1.lower_raw();
         auto maxi = y1.upper_raw();
@@ -66,14 +61,13 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return Bounds<T>(mini, maxi);
     }
 #else
-    Bounds<T> evaluate(const Bounds<T> &x, int subIntervals = 1) const final {
+    Bounds<T> apply(const Interval<T> &x, Nat subIntervals = 1) const final {
         // Skip OpenMP overheads
         if (subIntervals == 1)
-            return evaluate_impl(x);
+            return evaluate_impl(this->fromInterval(x));
 
-        auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
-        auto interval =
-            Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
+        auto stepSize = (x._u - x._l) / subIntervals;
+        auto interval = Bounds<T>(x._l, (x._l + stepSize).upper_raw());
 
         std::vector<Bounds<T>> results{};
 
@@ -99,16 +93,13 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     }
 #endif
 
-    Bounds<T> evaluateRaw(const Bounds<T> &x) const final {
-        return evaluate_impl(x);
-    }
+    Bounds<T> evaluate(const Bounds<T> &x) const final { return evaluate_impl(x); }
 
     Bounds<T> evaluateDerivative(const Bounds<T> &x) const final {
         auto y1 = evaluate_deriv_impl(x.lower_raw());
         auto y2 = evaluate_deriv_impl(x.upper_raw());
 
-        auto res = Bounds<T>(min(y1.lower_raw(), y2.lower_raw()),
-                             max(y1.upper(), y2.upper()));
+        auto res = Bounds<T>(min(y1.lower_raw(), y2.lower_raw()), max(y1.upper(), y2.upper()));
 
         return res;
     }
@@ -243,8 +234,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return sum;
     }
 
-    void
-        generateCoefficients(const std::function<Bounds<T>(Bounds<T>)> &function) {
+    void generateCoefficients(const std::function<Bounds<T>(Bounds<T>)> &function) {
         _coefficients.clear();
         _coefficients.reserve(_degree + 1);
 
@@ -259,9 +249,8 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     }
 
     void computeDerivEndpoints() {
-        _derivativeEndpoints = {
-            (_coefficients[1] - _coefficients[0]) * _degree,
-            (_coefficients[_degree - 1] - _coefficients[_degree]) * _degree};
+        _derivativeEndpoints = {(_coefficients[1] - _coefficients[0]) * _degree,
+                                (_coefficients[_degree - 1] - _coefficients[_degree]) * _degree};
     }
 
     void findCriticalPoints(int secantIterations = 5) {
@@ -319,14 +308,11 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         }
     }
 
-    static Bounds<T> bernsteinBasisPolynomialFor(int v, int n,
-                                                 const Bounds<T> &x) {
+    static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T> &x) {
         return pow(x, v) * pow(1 - x, n - v);
     }
 
-    const Bounds<T>
-        secantMethod(const Bounds<T> &x,
-                     const PositiveUpperBound<T> &targetEpsilon) const {
+    const Bounds<T> secantMethod(const Bounds<T> &x, const PositiveUpperBound<T> &targetEpsilon) const {
         T s[]{x.lower_raw(), x.upper_raw()};
 
         auto leftval = this->evaluate_deriv_impl(s[0]);
@@ -367,9 +353,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
 
         auto rightDeriv = this->evaluate_deriv_impl(right);
 
-        auto res =
-            (right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv)))
-                .value();
+        auto res = (right - rightDeriv * ((right - left) / (rightDeriv - leftDeriv))).value();
 
         if (is_nan(res))
             return false;

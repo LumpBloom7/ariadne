@@ -83,7 +83,7 @@ SpacesInContainerLiterals: false
 SpacesInAngles: Never
 SpacesInSquareBrackets: false
 Standard: Auto
-ColumnLimit: 0
+ColumnLimit: 120
 KeepEmptyLinesAtTheStartOfBlocks: false
 IncludeCategories:
   - Regex: <([A-Za-z0-9\Q/-_\E])+>

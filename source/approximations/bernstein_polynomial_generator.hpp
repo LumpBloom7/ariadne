@@ -1,14 +1,12 @@
 #ifndef ARIADNE_BERNSTEIN_POLYNOMIAL_GENERATOR_HPP
 #define ARIADNE_BERNSTEIN_POLYNOMIAL_GENERATOR_HPP
 
-#include <exception>
 #include <memory>
 
 #include "approximations/bernstein_polynomial.hpp"
 #include "approximations/bounded_bernstein_polynomial.hpp"
 
 namespace Ariadne {
-
 template<typename T>
 auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &epsilon, int maxDepth = 1, int subIntervals = 1) {
     DegreeType degree = 1;
@@ -22,23 +20,6 @@ auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &fu
         degree *= 2;
         b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
         bounded = BoundedPolynomialApproximation(function, b, epsilon, maxDepth, subIntervals);
-    }
-
-    return bounded;
-}
-template<typename T>
-auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> &epsilon, const T &minimumIntervalWidth, int subIntervals = 1) {
-    DegreeType degree = 1;
-
-    std::shared_ptr<IPolynomialApproximation<T>> b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
-    auto bounded = BoundedPolynomialApproximation(function, b, epsilon, minimumIntervalWidth, subIntervals);
-
-    while (!decide(bounded.maximumError() < epsilon)) {
-        std::cout << degree << " " << bounded.maximumError() << std::endl;
-
-        degree *= 2;
-        b = std::make_shared<BernsteinPolynomial<T>>(function, degree, epsilon.precision());
-        bounded = BoundedPolynomialApproximation(function, b, epsilon, minimumIntervalWidth, subIntervals);
     }
 
     return bounded;

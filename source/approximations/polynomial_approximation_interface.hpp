@@ -1,10 +1,21 @@
 #ifndef ARIADNE_POLYNOMIAL_APPROXIMATION_INTERFACE_HPP
 #define ARIADNE_POLYNOMIAL_APPROXIMATION_INTERFACE_HPP
 
-#include "geometry/interval.hpp"
+#include <memory>
 
+#include "geometry/interval.hpp"
+#include "utility/container.hpp"
 
 namespace Ariadne {
+template<typename pT, typename T> Bounds<T> apply(const pT &polynomial, const Interval<T> &x, Nat subIntervals = 1) {
+    polynomial.range(x, subIntervals);
+}
+
+template<typename pT, typename T>
+Bounds<T> apply(const std::shared_ptr<pT> &polynomial, const Interval<T> &x, Nat subIntervals = 1) {
+    polynomial->range(x, subIntervals);
+}
+
 template<typename T> class IPolynomialApproximation {
   protected:
     using RND = T::RoundingModeType;
@@ -12,15 +23,15 @@ template<typename T> class IPolynomialApproximation {
 
   public:
     ~IPolynomialApproximation() {}
-    virtual Bounds<T> apply(const Interval<T> &x, Nat subIntervals = 1) const = 0;
-    virtual Bounds<T> evaluate(const Bounds<T> &x) const { return apply(toInterval(x)); }
+    virtual Bounds<T> range(const Interval<T> &x, Nat subIntervals = 1) const = 0;
+    virtual Bounds<T> evaluate(const Bounds<T> &x) const { return range(toInterval(x)); }
     virtual Bounds<T> evaluateDerivative(const Bounds<T> &x) const = 0;
 
     virtual DegreeType degree() const = 0;
     virtual PR precision() const = 0;
 
     Bounds<T> operator()(const Bounds<T> &x) const { return evaluate(x); }
-    Bounds<T> operator()(const Interval<T> &x, Nat subintervals = 1) const { return apply(x, subintervals); }
+    Bounds<T> operator()(const Interval<T> &x, Nat subintervals = 1) const { return range(x, subintervals); }
 
   protected:
     Interval<T> toInterval(const Bounds<T> &bounds) const { return Interval<T>(bounds._l, bounds._u); }

@@ -49,8 +49,8 @@ template<typename T> class BoundedPolynomialApproximation : virtual public IPoly
         computeErrorBounds(function, epsilon, minimumIntervalWidth, subintervals);
     }
 
-    virtual TBounds apply(const TInterval &x, Nat subInterval = 1) const override {
-        return originalPoly->apply(x, subInterval);
+    virtual TBounds range(const TInterval &x, Nat subInterval = 1) const override {
+        return originalPoly->range(x, subInterval);
     }
 
     virtual TBounds evaluate(const TBounds &x) const override { return originalPoly->evaluate(x); }
@@ -251,7 +251,7 @@ template<typename T> class BoundedPolynomialApproximation : virtual public IPoly
 
         for (int i = 1; i <= degree; ++i) {
             auto actual = function(x);
-            auto predicted = this->apply(toInterval(x), subintervals);
+            auto predicted = this->range(toInterval(x), subintervals);
 
             auto errorUpperBound = mag(actual - predicted);
 
@@ -278,7 +278,7 @@ template<typename T> class BoundedPolynomialApproximation : virtual public IPoly
         for (int i = 0; i < degree; ++i) {
             auto interval = x + degreeReciprocal * i;
             auto actual = function(interval);
-            auto predicted = this->apply(this->toInterval(interval), subintervals);
+            auto predicted = this->range(this->toInterval(interval), subintervals);
 
             auto errorUpperBound = mag(actual - predicted);
 

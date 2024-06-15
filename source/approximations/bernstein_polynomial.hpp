@@ -44,7 +44,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     }
 
 #ifndef _OPENMP
-    Bounds<T> apply(const Interval<T> &x, Nat subIntervals = 1) const final {
+    Bounds<T> range(const Interval<T> &x, Nat subIntervals = 1) const final {
         auto stepSize = (x.upper_raw() - x.lower_raw()) / subIntervals;
 
         auto subinterval = Bounds<T>(x.lower_raw(), (x.lower_raw() + stepSize).upper_raw());
@@ -64,7 +64,7 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return Bounds<T>(mini, maxi);
     }
 #else
-    Bounds<T> apply(const Interval<T> &x, Nat subIntervals = 1) const final {
+    Bounds<T> range(const Interval<T> &x, Nat subIntervals = 1) const final {
         // Skip OpenMP overheads
         if (subIntervals == 1)
             return evaluate_impl(this->fromInterval(x));

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include <vector>
 
 #include "approximations/polynomial_approximation_interface.hpp"
 #include "geometry/interval.hpp"
@@ -60,6 +61,8 @@ template<typename T> class BoundedPolynomialApproximation : virtual public IPoly
     virtual DegreeType degree() const override { return originalPoly->degree(); }
 
     virtual PR precision() const override { return originalPoly->precision(); }
+
+    virtual std::vector<T> coefficients() const override { return originalPoly->coefficients(); }
 
     PositiveUpperBound<T> maximumError() const {
         auto maximum = _errorBounds[0];

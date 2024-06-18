@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <stack>
+#include <vector>
 
 #include "approximations/polynomial_approximation_interface.hpp"
 #include "numeric/builtin.hpp"
@@ -107,9 +108,11 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
         return res;
     }
 
-    DegreeType degree() const final { return _degree; };
+    DegreeType degree() const final { return _degree; }
 
     PR precision() const final { return _precision; }
+
+    std::vector<T> coefficients() const final { return _coefficients; }
 
     Bounds<T> DeCasteljau(const Bounds<T> &x) const {
         std::vector<Bounds<T>> beta = std::vector<Bounds<T>>(_coefficients);
@@ -260,8 +263,6 @@ class BernsteinPolynomial : virtual public IPolynomialApproximation<T>,
     static Bounds<T> bernsteinBasisPolynomialFor(int v, int n, const Bounds<T> &x) {
         return pow(x, v) * pow(1 - x, n - v);
     }
-
-
 
     std::vector<T> _coefficients{};
     std::vector<Bounds<T>> _derivativeEndpoints;

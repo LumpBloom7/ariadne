@@ -55,6 +55,8 @@ template<typename T> class FastBoundedPolynomialApproximation : virtual public I
 
     virtual PR precision() const override { return originalPoly->precision(); }
 
+    virtual std::vector<T> coefficients() const override { return originalPoly->coefficients(); }
+
     PositiveUpperBound<T> maximumError() const {
         auto maximum = _errorBounds[0];
 

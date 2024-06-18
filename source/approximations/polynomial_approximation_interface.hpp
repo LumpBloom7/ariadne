@@ -7,13 +7,14 @@
 #include "utility/container.hpp"
 
 namespace Ariadne {
-template<typename pT, typename T> Bounds<T> apply(const pT &polynomial, const Interval<T> &x, Nat subIntervals = 1) {
-    polynomial.range(x, subIntervals);
-}
 
 template<typename pT, typename T>
 Bounds<T> apply(const std::shared_ptr<pT> &polynomial, const Interval<T> &x, Nat subIntervals = 1) {
     polynomial->range(x, subIntervals);
+}
+
+template<typename pT, typename T> Bounds<T> apply(const pT &polynomial, const Interval<T> &x, Nat subIntervals = 1) {
+    polynomial.range(x, subIntervals);
 }
 
 template<typename T> class IPolynomialApproximation {
@@ -29,6 +30,7 @@ template<typename T> class IPolynomialApproximation {
 
     virtual DegreeType degree() const = 0;
     virtual PR precision() const = 0;
+    virtual std::vector<T> coefficients() const = 0;
 
     Bounds<T> operator()(const Bounds<T> &x) const { return evaluate(x); }
     Bounds<T> operator()(const Interval<T> &x, Nat subintervals = 1) const { return range(x, subintervals); }

@@ -26,7 +26,7 @@ auto createBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &fu
 }
 
 template<typename T>
-auto createIterativeBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon, int maxIterations = 10, int maxDepth = 1, int subIntervals = 1) {
+auto createIteratedBernsteinPolynomialWith(const std::function<Bounds<T>(Bounds<T>)> &function, const PositiveUpperBound<T> epsilon, int maxIterations = 10, int maxDepth = 1, int subIntervals = 1) {
     DegreeType degree = 1;
 
     while (true) {
